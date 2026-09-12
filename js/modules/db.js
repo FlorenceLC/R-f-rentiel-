@@ -11,8 +11,16 @@ let _db = null;
 export async function initDB() {
   if (_db) return _db;
 
+  // Chemin relatif au root du site — fonctionne sur GitHub Pages
+  const base = (() => {
+    const scripts = [...document.querySelectorAll('script[src]')];
+    const sqlScript = scripts.find(s => s.src.includes('sql-wasm'));
+    if (sqlScript) return sqlScript.src.replace('sql-wasm.js', '');
+    return window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+  })();
+
   const SQL = await window.initSqlJs({
-    locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${f}`
+    locateFile: f => base + f
   });
 
   const saved = await _idbLoad();
