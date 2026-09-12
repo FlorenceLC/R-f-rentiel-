@@ -8,41 +8,87 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- sql.js (SQLite compiled to WebAssembly) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <!-- sql.js — bundled locally, pas de CDN -->
+  <script src="./sql-wasm.js"></script>
 
   <style>
     #loading {
       position:fixed; inset:0;
       display:flex; flex-direction:column; align-items:center; justify-content:center;
       background: linear-gradient(135deg,#0f2040,#1e3a5f);
-      color:white; z-index:9999;
+      color:white; z-index:9999; text-align:center; padding:24px;
     }
-    #loading .spinner { width:48px; height:48px; margin-bottom:20px; }
+    #loading .spin {
+      width:48px; height:48px; margin-bottom:20px;
+      border:4px solid rgba(255,255,255,0.2);
+      border-top-color:white; border-radius:50%;
+      animation:spin .7s linear infinite;
+    }
     #loading h2 { font-size:1.2rem; font-weight:700; margin-bottom:8px; }
-    #loading p { font-size:13px; color:#90b8d8; }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+    #loading p  { font-size:13px; color:#90b8d8; max-width:400px; }
+    #loading-error { display:none; margin-top:16px; background:rgba(220,53,69,0.25); border:1px solid rgba(220,53,69,0.5); border-radius:8px; padding:14px 18px; max-width:480px; font-size:13px; line-height:1.6; }
+    @keyframes spin { to { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
 
   <!-- Loading screen -->
   <div id="loading">
-    <div class="spinner" style="border-color:rgba(255,255,255,0.2);border-top-color:white;border-width:4px;border-radius:50%;animation:spin .7s linear infinite;"></div>
+    <div class="spin"></div>
     <h2>🔷 Référentiel des cas d'usage</h2>
-    <p>Initialisation de la base de données locale…</p>
+    <p id="loading-msg">Initialisation de la base de données locale…</p>
+    <div id="loading-error"></div>
   </div>
 
   <!-- App root -->
   <div id="app"></div>
 
+  <script>
+    // Timeout de sécurité — si l'app ne démarre pas en 15s, afficher un message d'aide
+    const _bootTimeout = setTimeout(() => {
+      const errEl = document.getElementById('loading-error');
+      const msgEl = document.getElementById('loading-msg');
+      if (errEl && document.getElementById('loading').style.display !== 'none') {
+        msgEl.textContent = 'Le démarrage prend plus de temps que prévu…';
+        errEl.style.display = 'block';
+        errEl.innerHTML = `
+          <strong>⚠️ Problème de chargement</strong><br><br>
+          Causes possibles :<br>
+          • Le fichier <code>sql-wasm.wasm</code> n'est pas servi correctement par GitHub Pages<br>
+          • Votre navigateur bloque le WebAssembly<br><br>
+          <strong>Solutions :</strong><br>
+          1. Vérifiez que <code>sql-wasm.wasm</code> est bien dans le dépôt GitHub<br>
+          2. Attendez que GitHub Pages finisse de déployer (peut prendre 1–2 min)<br>
+          3. Essayez de vider le cache : <kbd>Ctrl+Shift+R</kbd> ou <kbd>Cmd+Shift+R</kbd><br>
+          4. Essayez dans un autre navigateur (Chrome recommandé)
+        `;
+      }
+    }, 15000);
+
+    window._clearBootTimeout = () => clearTimeout(_bootTimeout);
+  </script>
+
   <!-- Bootstrap the ES module app -->
   <script type="module">
     import { boot } from './js/app.js';
-    // Make closeModal globally available for inline onclick handlers
     import { closeModal } from './js/modules/ui.js';
     window.closeModal = closeModal;
-    boot();
+
+    try {
+      await boot();
+      window._clearBootTimeout?.();
+    } catch(e) {
+      console.error('Boot error:', e);
+      window._clearBootTimeout?.();
+      const errEl = document.getElementById('loading-error');
+      const msgEl = document.getElementById('loading-msg');
+      if (errEl) {
+        msgEl.textContent = 'Erreur de démarrage';
+        errEl.style.display = 'block';
+        errEl.innerHTML = `<strong>❌ Erreur :</strong> ${e.message}<br><br>
+          Ouvrez la console (F12) pour plus de détails.`;
+      }
+    }
   </script>
 </body>
 </html>
