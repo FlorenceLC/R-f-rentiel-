@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Référentiel des cas d'usage</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- sql.js (SQLite compiled to WebAssembly) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+
+  <style>
+    #loading {
+      position:fixed; inset:0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background: linear-gradient(135deg,#0f2040,#1e3a5f);
+      color:white; z-index:9999;
+    }
+    #loading .spinner { width:48px; height:48px; margin-bottom:20px; }
+    #loading h2 { font-size:1.2rem; font-weight:700; margin-bottom:8px; }
+    #loading p { font-size:13px; color:#90b8d8; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+  </style>
+</head>
+<body>
+
+  <!-- Loading screen -->
+  <div id="loading">
+    <div class="spinner" style="border-color:rgba(255,255,255,0.2);border-top-color:white;border-width:4px;border-radius:50%;animation:spin .7s linear infinite;"></div>
+    <h2>🔷 Référentiel des cas d'usage</h2>
+    <p>Initialisation de la base de données locale…</p>
+  </div>
+
+  <!-- App root -->
+  <div id="app"></div>
+
+  <!-- Bootstrap the ES module app -->
+  <script type="module">
+    import { boot } from './js/app.js';
+    // Make closeModal globally available for inline onclick handlers
+    import { closeModal } from './js/modules/ui.js';
+    window.closeModal = closeModal;
+    boot();
+  </script>
+</body>
+</html>
