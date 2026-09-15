@@ -8,9 +8,10 @@ const AI_TIMEOUT = 30000;
 
 function getAIConfig() {
   return {
-    base_url: getSetting('ai_base_url', ''),
-    api_key:  getSetting('ai_api_key', ''),
-    model:    getSetting('ai_model', 'gpt-4'),
+    base_url:      getSetting('ai_base_url', ''),
+    api_key:       getSetting('ai_api_key', ''),
+    model:         getSetting('ai_model', 'gpt-4'),
+    gravitee_key:  getSetting('ai_gravitee_key', ''),
   };
 }
 
@@ -20,7 +21,7 @@ export function isAIAvailable() {
 }
 
 export async function callAI(systemPrompt, userMessage, { temperature = 0.3, max_tokens = 1500 } = {}) {
-  const { base_url, api_key, model } = getAIConfig();
+  const { base_url, api_key, model, gravitee_key } = getAIConfig();
   if (!base_url || !api_key) {
     return { ok: false, text: 'API IA non configurée. Renseignez l\'URL et la clé dans Paramètres → IA.' };
   }
@@ -29,13 +30,16 @@ export async function callAI(systemPrompt, userMessage, { temperature = 0.3, max
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), AI_TIMEOUT);
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${api_key}`,
+  };
+  if (gravitee_key) headers['X-Gravitee-Api-Key'] = gravitee_key;
+
   try {
     const resp = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${api_key}`,
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages: [
@@ -67,36 +71,9 @@ export async function analyzeRequest(requestData, catalogue) {
     `- ${cu.cu_id} | ${cu.nom} | ${cu.type_besoin||''} | ${cu.technologie||''} | Statut: ${cu.statut}`
   ).join('\n');
 
-  const systemPrompt = `Tu es un expert en transformation digitale et innovation.
-Tu analyses des demandes de cas d'usage pour un département innovation interne.
-Tu dois répondre UNIQUEMENT en JSON valide, sans texte avant ou après.
-Format de réponse attendu :
-{
-  "type_besoin": "...",
-  "technologie": "...",
-  "analyse": "...",
-  "similar_cases": [
-    {"cu_id": "CU-XXXX", "nom": "...", "score": 85, "justification": "..."}
-  ]
-}
-Les types de besoin possibles : Automatisation, IA générative, Analyse de données, Reporting, Aide à la décision, Digitalisation, Optimisation.
-Les technologies possibles : Python, Power BI, IA générative, Machine Learning, RPA, API, SQL, LLM, IoT, OCR.
-Le score de similarité est un entier entre 0 et 100.
-N'inclure que les cas d'usage avec un score > 60.`;
+  const systemPrompt = `Tu es un expert en transformation digitale et innovation.\nTu analyses des demandes de cas d'usage pour un département innovation interne.\nTu dois répondre UNIQUEMENT en JSON valide, sans texte avant ou après.\nFormat de réponse attendu :\n{\n  \"type_besoin\": \"...\",\n  \"technologie\": \"...\",\n  \"analyse\": \"...\",\n  \"similar_cases\": [\n    {\"cu_id\": \"CU-XXXX\", \"nom\": \"...\", \"score\": 85, \"justification\": \"...\"}\n  ]\n}\nLes types de besoin possibles : Automatisation, IA générative, Analyse de données, Reporting, Aide à la décision, Digitalisation, Optimisation.\nLes technologies possibles : Python, Power BI, IA générative, Machine Learning, RPA, API, SQL, LLM, IoT, OCR.\nLe score de similarité est un entier entre 0 et 100.\nN'inclure que les cas d'usage avec un score > 60.`;
 
-  const userMessage = `Analyse cette demande :
-
-DEMANDEUR : ${requestData.prenom} ${requestData.nom} — ${requestData.direction}
-CONTEXTE : ${requestData.contexte}
-OBJECTIF : ${requestData.objectif}
-COMMENTAIRE : ${requestData.commentaire || 'Aucun'}
-ROI ESTIMÉ : ${requestData.roi_estime || 'Non renseigné'} heures/an
-
-CATALOGUE EXISTANT :
-${catalogueSummary}
-
-Identifie le type de besoin, la technologie adaptée, rédige une analyse concise (2-3 phrases),
-et identifie les cas d'usage du catalogue potentiellement similaires.`;
+  const userMessage = `Analyse cette demande :\n\nDEMANDEUR : ${requestData.prenom} ${requestData.nom} — ${requestData.direction}\nCONTEXTE : ${requestData.contexte}\nOBJECTIF : ${requestData.objectif}\nCOMMENTAIRE : ${requestData.commentaire || 'Aucun'}\nROI ESTIMÉ : ${requestData.roi_estime || 'Non renseigné'} heures/an\n\nCATALOGUE EXISTANT :\n${catalogueSummary}\n\nIdentifie le type de besoin, la technologie adaptée, rédige une analyse concise (2-3 phrases),\net identifie les cas d'usage du catalogue potentiellement similaires.`;
 
   const { ok, text } = await callAI(systemPrompt, userMessage, { temperature: 0.2, max_tokens: 1000 });
   if (!ok) return { ok: false, error: text };
@@ -115,15 +92,7 @@ export async function chatWithCatalogue(question, history, contextCU) {
     `=== ${cu.cu_id} — ${cu.nom} ===\nStatut : ${cu.statut}\nType : ${cu.type_besoin||''}\nTechnologie : ${cu.technologie||''}\nDescription : ${cu.description||''}\nResponsable : ${cu.responsable||''}`
   ).join('\n\n');
 
-  const systemPrompt = `Tu es l'assistant du Référentiel des cas d'usage d'un département innovation interne.
-Tu réponds aux questions des utilisateurs en t'appuyant UNIQUEMENT sur les cas d'usage fournis en contexte.
-Si tu ne trouves pas l'information dans le contexte, dis-le clairement.
-N'invente jamais de cas d'usage inexistants.
-À la fin de ta réponse, cite toujours les CU sources utilisés sous la forme :
-Sources : CU-XXXX, CU-YYYY
-
-CATALOGUE DISPONIBLE :
-${contextText}`;
+  const systemPrompt = `Tu es l'assistant du Référentiel des cas d'usage d'un département innovation interne.\nTu réponds aux questions des utilisateurs en t'appuyant UNIQUEMENT sur les cas d'usage fournis en contexte.\nSi tu ne trouves pas l'information dans le contexte, dis-le clairement.\nN'invente jamais de cas d'usage inexistants.\nÀ la fin de ta réponse, cite toujours les CU sources utilisés sous la forme :\nSources : CU-XXXX, CU-YYYY\n\nCATALOGUE DISPONIBLE :\n${contextText}`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -131,15 +100,21 @@ ${contextText}`;
     { role: 'user', content: question },
   ];
 
-  const { base_url, api_key, model } = getAIConfig();
+  const { base_url, api_key, model, gravitee_key } = getAIConfig();
   if (!base_url || !api_key) return { ok: false, text: 'L\'assistant IA n\'est pas configuré.', sources: [] };
 
   const endpoint = base_url.replace(/\/$/, '') + '/v1/chat/completions';
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${api_key}`,
+  };
+  if (gravitee_key) headers['X-Gravitee-Api-Key'] = gravitee_key;
+
   try {
     const resp = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${api_key}` },
+      headers,
       body: JSON.stringify({ model, messages, temperature: 0.3, max_tokens: 800 }),
     });
     if (!resp.ok) return { ok: false, text: `Erreur API (${resp.status})`, sources: [] };

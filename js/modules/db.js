@@ -239,9 +239,13 @@ function _seedData() {
     ['app_name','Référentiel des cas d\'usage','Nom de l\'application','string'],
     ['app_department','Direction de l\'Innovation','Nom du département','string'],
     ['app_contact_email','innovation@entreprise.fr','Email de contact','string'],
+    ['app_contact_cc','','Destinataires en copie (séparés par des virgules)','string'],
+    ['app_contact_subject','Demande d\'information','Objet du mail de contact','string'],
+    ['app_contact_body','','Corps du mail de contact (optionnel)','string'],
     ['ai_base_url','','URL de l\'API IA (compatible OpenAI)','string'],
     ['ai_api_key','','Clé API IA','string'],
     ['ai_model','gpt-4','Modèle IA à utiliser','string'],
+    ['ai_gravitee_key','','Clé Gravitee API Gateway (X-Gravitee-Api-Key)','string'],
     ['show_roi_public','true','Afficher les ROI aux visiteurs','boolean'],
     ['max_similar_results','5','Nombre maximum de CU similaires','integer'],
   ];
