@@ -199,9 +199,10 @@ export function renderAdminParamsIA(container) {
     const r = queryOne(`SELECT valeur FROM settings WHERE cle=?`,[k]); return r ? (r.valeur??d) : d;
   }, setSetting: async (k,v) => { run(`INSERT INTO settings(cle,valeur) VALUES(?,?) ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur,date_modification=datetime('now')`, [k,v]); await saveDB(); }};
 
-  const baseUrl = getSetting('ai_base_url');
-  const apiKey  = getSetting('ai_api_key');
-  const model   = getSetting('ai_model','gpt-4');
+  const baseUrl     = getSetting('ai_base_url');
+  const apiKey      = getSetting('ai_api_key');
+  const model       = getSetting('ai_model','gpt-4');
+  const graviteeKey = getSetting('ai_gravitee_key','');
 
   container.innerHTML = `
     <div class="hero" style="padding:18px 24px;">
@@ -223,6 +224,14 @@ export function renderAdminParamsIA(container) {
           <input class="form-control" type="password" id="ia-key" value="${apiKey}" placeholder="sk-…" style="padding-right:80px">
           <button class="btn btn-ghost btn-sm" onclick="window._togglePwdVis('ia-key',this)" style="position:absolute;right:4px;top:4px;">👁 Afficher</button>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Clé Gravitee API Gateway <span class="text-muted">(optionnel)</span></label>
+        <div style="position:relative">
+          <input class="form-control" type="password" id="ia-gravitee" value="${graviteeKey}" placeholder="Laissez vide si non utilisé" style="padding-right:80px">
+          <button class="btn btn-ghost btn-sm" onclick="window._togglePwdVis('ia-gravitee',this)" style="position:absolute;right:4px;top:4px;">👁 Afficher</button>
+        </div>
+        <div class="form-hint">Ajouté comme en-tête <code>X-Gravitee-Api-Key</code> si renseigné.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Modèle</label>
@@ -251,9 +260,11 @@ export function renderAdminParamsIA(container) {
     const url = container.querySelector('#ia-url').value.trim();
     const key = container.querySelector('#ia-key').value.trim();
     const mod = container.querySelector('#ia-model').value.trim() || 'gpt-4';
+    const grav = container.querySelector('#ia-gravitee').value.trim();
     await setSetting('ai_base_url', url);
     await setSetting('ai_api_key', key);
     await setSetting('ai_model', mod);
+    await setSetting('ai_gravitee_key', grav);
     toast('Configuration IA enregistrée.', 'success');
   });
 
@@ -277,19 +288,33 @@ export function renderAdminParams(container) {
 
   container.innerHTML = `
     <div class="hero" style="padding:18px 24px;"><h1>⚙️ Paramètres généraux</h1></div>
-    <div class="card" style="max-width:600px;">
+    <div class="card mb-2" style="max-width:600px;">
+      <div class="section-title mb-2">🏢 Application</div>
       <div class="form-group"><label class="form-label">Nom de l'application</label>
         <input class="form-control" id="p-name" value="${gs('app_name')}"></div>
       <div class="form-group"><label class="form-label">Département</label>
         <input class="form-control" id="p-dept" value="${gs('app_department')}"></div>
-      <div class="form-group"><label class="form-label">Email de contact</label>
+
+      <div class="section-title mb-2 mt-2">📬 Contact</div>
+      <div class="form-group"><label class="form-label">Email de contact principal <span class="required">*</span></label>
         <input class="form-control" type="email" id="p-email" value="${gs('app_contact_email')}"></div>
+      <div class="form-group"><label class="form-label">Destinataires en copie (CC)</label>
+        <input class="form-control" id="p-cc" value="${gs('app_contact_cc')}" placeholder="email1@exemple.fr, email2@exemple.fr">
+        <div class="form-hint">Séparez plusieurs adresses par des virgules.</div></div>
+      <div class="form-group"><label class="form-label">Objet du mail</label>
+        <input class="form-control" id="p-subject" value="${gs('app_contact_subject') || 'Demande d\'information'}" placeholder="Demande d'information"></div>
+      <div class="form-group"><label class="form-label">Corps du mail (optionnel)</label>
+        <textarea class="form-control" id="p-body" rows="3" placeholder="Bonjour,%0A%0AJe souhaite...">${gs('app_contact_body')}</textarea>
+        <div class="form-hint">Texte pré-rempli dans le corps du mail.</div></div>
+
+      <div class="section-title mb-2 mt-2">👁️ Visibilité</div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="p-roi" ${gs('show_roi_public')==='true'?'checked':''}>
           <span class="form-label" style="margin:0">Afficher les ROI aux visiteurs</span>
         </label>
       </div>
+
       <div class="flex gap-1 mt-2">
         <button class="btn btn-primary" id="p-save">💾 Enregistrer</button>
         <button class="btn btn-danger" id="p-reset" style="margin-left:auto">🗑️ Réinitialiser la base de données</button>
@@ -301,6 +326,9 @@ export function renderAdminParams(container) {
     await ss('app_name', container.querySelector('#p-name').value);
     await ss('app_department', container.querySelector('#p-dept').value);
     await ss('app_contact_email', container.querySelector('#p-email').value);
+    await ss('app_contact_cc', container.querySelector('#p-cc').value);
+    await ss('app_contact_subject', container.querySelector('#p-subject').value);
+    await ss('app_contact_body', container.querySelector('#p-body').value);
     await ss('show_roi_public', container.querySelector('#p-roi').checked ? 'true' : 'false');
     toast('Paramètres enregistrés.', 'success');
   });
