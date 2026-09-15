@@ -1,8 +1,18 @@
 import { query, getSetting } from '../modules/db.js';
 
 export function renderGuide(container) {
-  const dept  = getSetting('app_department', 'Direction de l\'Innovation');
-  const email = getSetting('app_contact_email', 'innovation@entreprise.fr');
+  const dept    = getSetting('app_department', 'Direction de l\'Innovation');
+  const email   = getSetting('app_contact_email', 'innovation@entreprise.fr');
+  const cc      = getSetting('app_contact_cc', '');
+  const subject = getSetting('app_contact_subject', 'Demande d\'information');
+  const body    = getSetting('app_contact_body', '');
+
+  // Build mailto URL
+  const mailtoParams = [];
+  if (cc)      mailtoParams.push(`cc=${encodeURIComponent(cc)}`);
+  if (subject) mailtoParams.push(`subject=${encodeURIComponent(subject)}`);
+  if (body)    mailtoParams.push(`body=${encodeURIComponent(body)}`);
+  const mailtoUrl = `mailto:${email}${mailtoParams.length ? '?' + mailtoParams.join('&') : ''}`;
 
   container.innerHTML = `
     <div class="hero" style="padding:18px 24px;">
@@ -59,8 +69,8 @@ export function renderGuide(container) {
           <div style="font-size:1.5rem;margin-bottom:8px;">📬</div>
           <div style="font-weight:700;font-size:14px;margin-bottom:6px;">Contacter le département</div>
           <div style="font-size:12px;color:var(--blue-border);margin-bottom:12px;">${dept}</div>
-          <a href="mailto:${email}" class="btn btn-outline" style="border-color:rgba(255,255,255,0.4);color:white;font-size:12px;">
-            ✉️ ${email}
+          <a href="${mailtoUrl}" class="btn btn-outline" style="border-color:rgba(255,255,255,0.4);color:var(--blue-dark);background:white;font-size:12px;font-weight:600;">
+            ✉️ Nous contacter
           </a>
         </div>
 

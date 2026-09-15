@@ -1,6 +1,7 @@
 import { queryOne, query, getSetting } from '../modules/db.js';
 import { kpiGrid, statusBadge, formatDate, formatROI, truncate, sectionTitle, chip } from '../modules/ui.js';
 import { navigate } from '../app.js';
+import { isAdmin } from '../modules/auth.js';
 
 export function renderAccueil(container) {
   const kpi = queryOne(`
@@ -20,6 +21,15 @@ export function renderAccueil(container) {
   const apps   = query(`SELECT * FROM use_cases WHERE actif=1 AND statut='Production' AND application_disponible=1 ORDER BY date_creation DESC LIMIT 3`);
   const appName = getSetting('app_name', 'Référentiel des cas d\'usage');
   const roi_total = parseFloat(kpi.roi_total || 0);
+  const admin = isAdmin();
+
+  const kpiItems = [
+    { icon:'📋', label:"Cas d'usage total",  value: kpi.total||0,      cls:'accent' },
+    { icon:'🚀', label:'En production',       value: kpi.production||0,  cls:'success' },
+    { icon:'🧪', label:'En POC',              value: kpi.poc||0,         cls:'warning' },
+    { icon:'📝', label:'En cadrage',          value: kpi.cadrage||0,     cls:'info' },
+  ];
+  if (admin) kpiItems.push({ icon:'💶', label:'ROI total production', value: formatROI(roi_total), cls:'success' });
 
   container.innerHTML = `
     <div class="hero">
@@ -35,13 +45,7 @@ export function renderAccueil(container) {
       </div>
     </div>
 
-    ${kpiGrid([
-      { icon:'📋', label:"Cas d'usage total",  value: kpi.total||0,      cls:'accent' },
-      { icon:'🚀', label:'En production',       value: kpi.production||0,  cls:'success' },
-      { icon:'🧪', label:'En POC',              value: kpi.poc||0,         cls:'warning' },
-      { icon:'📝', label:'En cadrage',          value: kpi.cadrage||0,     cls:'info' },
-      { icon:'💶', label:'ROI total production', value: formatROI(roi_total), cls:'success' },
-    ])}
+    ${kpiGrid(kpiItems)}
 
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:20px;flex-wrap:wrap;">
       <div>

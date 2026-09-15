@@ -150,10 +150,11 @@ function _fetchRows() {
 
 function _cuTable(rows) {
   if (!rows.length) return emptyState('🔍', 'Aucun cas d\'usage', 'Modifiez vos filtres ou recherche.');
+  const admin = isAdmin();
   return `<div class="table-wrap">
     <table class="data-table">
       <thead><tr>
-        <th>ID</th><th>Nom</th><th>Statut</th><th>Type</th><th>Technologie</th><th>Responsable</th><th>ROI/an</th><th>Date</th>
+        <th>ID</th><th>Nom</th><th>Statut</th><th>Type</th><th>Technologie</th><th>Responsable</th>${admin ? '<th>ROI/an</th>' : ''}<th>Date</th>
       </tr></thead>
       <tbody>
         ${rows.map(cu => `<tr style="cursor:pointer" onclick="navigate('catalogue',{cu_id:'${cu.cu_id}'})">
@@ -163,7 +164,7 @@ function _cuTable(rows) {
           <td>${chip(cu.type_besoin,'type')}</td>
           <td>${chip(cu.technologie,'tech')}</td>
           <td class="text-sm text-muted">${cu.responsable||'—'}</td>
-          <td class="text-sm" style="color:var(--green);font-weight:600">${cu.roi_annuel?formatROI(cu.roi_annuel):'—'}</td>
+          ${admin ? `<td class="text-sm" style="color:var(--green);font-weight:600">${cu.roi_annuel?formatROI(cu.roi_annuel):'—'}</td>` : ''}
           <td class="text-sm text-muted">${formatDate(cu.date_creation)}</td>
         </tr>`).join('')}
       </tbody>
@@ -215,7 +216,7 @@ function _renderDetail(container, cuId) {
         <div class="detail-item"><div class="di-label">Date de création</div><div class="di-value">${formatDate(cu.date_creation)}</div></div>
       </div>
 
-      ${(cu.roi_annuel || cu.gain_estime) ? `
+      ${admin && (cu.roi_annuel || cu.gain_estime) ? `
         <div class="roi-display mt-2">
           <div class="roi-value">${cu.roi_annuel ? formatROI(cu.roi_annuel) + '/an' : '—'}</div>
           <div class="roi-label">ROI annuel estimé</div>
