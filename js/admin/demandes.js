@@ -94,7 +94,7 @@ function _buildTable(rows) {
   return `<div class="table-wrap">
     <table class="data-table">
       <thead><tr>
-        <th>Réf.</th><th>Demandeur</th><th>Direction</th><th>Objectif</th>
+        <th>Réf.</th><th>Demandeur</th><th>Direction</th><th>Entité</th><th>Objectif</th>
         <th>Statut</th><th>IA</th><th>Similitudes</th><th>Date</th><th>Actions</th>
       </tr></thead>
       <tbody>
@@ -103,6 +103,7 @@ function _buildTable(rows) {
             <td class="cu-id">${r.dem_id}</td>
             <td class="text-sm"><strong>${r.prenom} ${r.nom}</strong><br><span class="text-muted">${r.email}</span></td>
             <td class="text-sm text-muted">${truncate(r.direction,20)}</td>
+            <td class="text-sm">${r.entite==='FR'?'🇫🇷 FR':r.entite==='DE'?'🇩🇪 DE':'—'}</td>
             <td class="text-sm">${truncate(r.objectif,50)}</td>
             <td>${statusBadge(r.statut)}</td>
             <td>${r.type_besoin_ia ? chip(r.type_besoin_ia,'type') : '<span class="text-muted text-sm">—</span>'}</td>
@@ -139,6 +140,7 @@ window._openDemande = (demId) => {
       <div class="detail-item"><div class="di-label">Demandeur</div><div class="di-value">${r.prenom} ${r.nom}</div></div>
       <div class="detail-item"><div class="di-label">Email</div><div class="di-value">${r.email}</div></div>
       <div class="detail-item"><div class="di-label">Direction</div><div class="di-value">${r.direction}</div></div>
+      ${r.entite ? `<div class="detail-item"><div class="di-label">Entité</div><div class="di-value">${r.entite==='FR'?'🇫🇷 KNDS France':r.entite==='DE'?'🇩🇪 KNDS Allemagne':r.entite}</div></div>` : ''}
       <div class="detail-item"><div class="di-label">Date</div><div class="di-value">${formatDate(r.date_demande)}</div></div>
     </div>
 
@@ -238,13 +240,15 @@ function _rejectRequest(demId, motif, comment) {
 }
 
 function _validateRequest(r, adm) {
-  const cuId = nextCuId();
+  const cuId = nextCuId(r.entite || null);
   const user = getCurrentUsername();
-  run(`INSERT INTO use_cases(cu_id,nom,description,type_besoin,type_sujet,statut,responsable,pilote_metier,technologie,roi_annuel,jira_url,request_id)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const origineFromRequest = r.entite || null;
+  run(`INSERT INTO use_cases(cu_id,nom,description,type_besoin,type_sujet,statut,responsable,pilote_metier,technologie,roi_annuel,jira_url,origine,visibilite,request_id)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [cuId, r.objectif || r.dem_id, r.contexte, adm.type||r.type_besoin_ia||null,
      adm.sujet||null, 'Besoin identifié', adm.resp||null, adm.pilote||null,
-     adm.tech||r.technologie_ia||null, adm.roi||null, adm.jira||null, r.id]);
+     adm.tech||r.technologie_ia||null, adm.roi||null, adm.jira||null,
+     origineFromRequest, 'common', r.id]);
   run(`UPDATE requests SET statut='Validée', type_besoin_admin=?, technologie_admin=?, type_sujet_admin=?,
     responsable_admin=?, pilote_metier_admin=?, jira_url_admin=?, roi_definitif=?,
     traite_par=?, date_traitement=datetime('now'), use_case_id=(SELECT id FROM use_cases WHERE cu_id=?)

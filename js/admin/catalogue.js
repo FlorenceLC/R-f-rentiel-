@@ -153,6 +153,20 @@ function _openEditModal(cuId, container) {
         <input class="form-control" id="cu-pilote" value="${v('pilote_metier')}"></div>
       <div class="form-group"><label class="form-label">ROI annuel (€)</label>
         <input class="form-control" type="number" id="cu-roi" value="${v('roi_annuel')}"></div>
+      <div class="form-group"><label class="form-label">Origine</label>
+        <select class="form-control" id="cu-origine">
+          <option value="" ${!v('origine')?'selected':''}>— Non défini —</option>
+          <option value="FR" ${v('origine')==='FR'?'selected':''}>🇫🇷 KNDS France</option>
+          <option value="DE" ${v('origine')==='DE'?'selected':''}>🇩🇪 KNDS Allemagne</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Visibilité</label>
+        <select class="form-control" id="cu-visibilite">
+          <option value="common" ${(v('visibilite')||'common')==='common'?'selected':''}>🌍 Commun FR+DE (catalogue uniquement)</option>
+          <option value="FR" ${v('visibilite')==='FR'?'selected':''}>🇫🇷 Spécial France</option>
+          <option value="DE" ${v('visibilite')==='DE'?'selected':''}>🇩🇪 Spécial Allemagne</option>
+        </select>
+        <div class="form-hint">Spécial FR/DE : visible dans l'onglet dédié. Commun : visible dans le catalogue uniquement.</div>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Description</label>
       <textarea class="form-control" id="cu-desc" rows="4">${v('description')}</textarea></div>
@@ -201,22 +215,25 @@ function _openEditModal(cuId, container) {
       application_disponible: document.querySelector('#cu-app').checked ? 1 : 0,
       application_url: document.querySelector('#cu-app-url').value || null,
       conditions_acces: document.querySelector('#cu-conditions').value || null,
+      origine:     document.querySelector('#cu-origine').value || null,
+      visibilite:  document.querySelector('#cu-visibilite').value || 'common',
     };
     if (isNew) {
-      const id = nextCuId();
-      run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,conditions_acces)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      const origine = data.origine || null;
+      const id = nextCuId(origine);
+      run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,conditions_acces,origine,visibilite)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
          data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-         data.application_disponible, data.application_url, data.conditions_acces]);
+         data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite]);
       toast(`CU créé : ${id}`, 'success');
     } else {
       run(`UPDATE use_cases SET nom=?,statut=?,type_besoin=?,technologie=?,type_sujet=?,responsable=?,
         pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
-        application_url=?,conditions_acces=?,date_modification=datetime('now') WHERE cu_id=?`,
+        application_url=?,conditions_acces=?,origine=?,visibilite=?,date_modification=datetime('now') WHERE cu_id=?`,
         [data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
          data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-         data.application_disponible, data.application_url, data.conditions_acces, cuId]);
+         data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite, cuId]);
       toast(`${cuId} mis à jour.`, 'success');
     }
     saveDB();

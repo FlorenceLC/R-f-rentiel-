@@ -96,13 +96,14 @@ function _renderUsers(container) {
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Identifiant</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Actif</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Identifiant</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Pays</th><th>Actif</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
         <tbody>
           ${users.map(u=>`<tr>
             <td class="text-mono" style="font-size:12px">${u.username}</td>
             <td style="font-weight:500">${u.prenom||''} ${u.nom||''}</td>
             <td class="text-sm text-muted">${u.email}</td>
             <td><span class="badge badge-besoin">${u.role}</span></td>
+            <td>${u.pays==='FR'?'🇫🇷 France':u.pays==='DE'?'🇩🇪 Allemagne':'—'}</td>
             <td>${u.actif?'🟢':'⭕'}</td>
             <td class="text-sm text-muted">${u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleDateString('fr-FR') : '—'}</td>
             <td style="white-space:nowrap">
@@ -158,6 +159,12 @@ function _openUserModal(userId, container) {
         <select class="form-control" id="u-role">
           ${roles.map(r=>`<option ${r===(u?.role||'ADMIN_I')?'selected':''}>${r}</option>`).join('')}
         </select></div>
+      <div class="form-group"><label class="form-label">Pays (mode bilingue)</label>
+        <select class="form-control" id="u-pays">
+          <option value="" ${!u?.pays?'selected':''}>— Non défini —</option>
+          <option value="FR" ${u?.pays==='FR'?'selected':''}>🇫🇷 France</option>
+          <option value="DE" ${u?.pays==='DE'?'selected':''}>🇩🇪 Allemagne</option>
+        </select></div>
       ${!u ? `<div class="form-group"><label class="form-label">Mot de passe <span class="required">*</span></label>
         <input class="form-control" type="password" id="u-pwd" placeholder="Min. 6 caractères"></div>` : ''}
     </div>
@@ -172,17 +179,18 @@ function _openUserModal(userId, container) {
     const prenom   = document.querySelector('#u-prenom').value.trim();
     const nom      = document.querySelector('#u-nom').value.trim();
     const role     = document.querySelector('#u-role').value;
+    const pays     = document.querySelector('#u-pays').value || null;
     if (!username || !email) { toast('Identifiant et email sont obligatoires.', 'danger'); return; }
     if (u) {
-      run(`UPDATE users SET prenom=?,nom=?,email=?,role=?,date_modification=datetime('now') WHERE id=?`,
-        [prenom, nom, email, role, u.id]);
+      run(`UPDATE users SET prenom=?,nom=?,email=?,role=?,pays=?,date_modification=datetime('now') WHERE id=?`,
+        [prenom, nom, email, role, pays, u.id]);
       toast('Utilisateur mis à jour.', 'success');
     } else {
       const pwd = document.querySelector('#u-pwd')?.value;
       if (!pwd || pwd.length < 6) { toast('Mot de passe d\'au moins 6 caractères requis.', 'danger'); return; }
       const hash = await hashPassword(pwd);
-      run(`INSERT INTO users(username,password_hash,prenom,nom,email,role,actif) VALUES(?,?,?,?,?,?,1)`,
-        [username, hash, prenom, nom, email, role]);
+      run(`INSERT INTO users(username,password_hash,prenom,nom,email,role,pays,actif) VALUES(?,?,?,?,?,?,?,1)`,
+        [username, hash, prenom, nom, email, role, pays]);
       toast(`Utilisateur "${username}" créé.`, 'success');
     }
     saveDB();
@@ -288,49 +296,167 @@ export function renderAdminParams(container) {
 
   container.innerHTML = `
     <div class="hero" style="padding:18px 24px;"><h1>⚙️ Paramètres généraux</h1></div>
-    <div class="card mb-2" style="max-width:600px;">
-      <div class="section-title mb-2">🏢 Application</div>
-      <div class="form-group"><label class="form-label">Nom de l'application</label>
-        <input class="form-control" id="p-name" value="${gs('app_name')}"></div>
-      <div class="form-group"><label class="form-label">Département</label>
-        <input class="form-control" id="p-dept" value="${gs('app_department')}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 0 24px;max-width:1000px;">
 
-      <div class="section-title mb-2 mt-2">📬 Contact</div>
-      <div class="form-group"><label class="form-label">Email de contact principal <span class="required">*</span></label>
-        <input class="form-control" type="email" id="p-email" value="${gs('app_contact_email')}"></div>
-      <div class="form-group"><label class="form-label">Destinataires en copie (CC)</label>
-        <input class="form-control" id="p-cc" value="${gs('app_contact_cc')}" placeholder="email1@exemple.fr, email2@exemple.fr">
-        <div class="form-hint">Séparez plusieurs adresses par des virgules.</div></div>
-      <div class="form-group"><label class="form-label">Objet du mail</label>
-        <input class="form-control" id="p-subject" value="${gs('app_contact_subject') || 'Demande d\'information'}" placeholder="Demande d'information"></div>
-      <div class="form-group"><label class="form-label">Corps du mail (optionnel)</label>
-        <textarea class="form-control" id="p-body" rows="3" placeholder="Bonjour,%0A%0AJe souhaite...">${gs('app_contact_body')}</textarea>
-        <div class="form-hint">Texte pré-rempli dans le corps du mail.</div></div>
+      <!-- Colonne gauche -->
+      <div>
+        <div class="card mb-2">
+          <div class="section-title mb-2">🏢 Application</div>
+          <div class="form-group"><label class="form-label">Nom de l'application</label>
+            <input class="form-control" id="p-name" value="${gs('app_name')}"></div>
+          <div class="form-group"><label class="form-label">Département</label>
+            <input class="form-control" id="p-dept" value="${gs('app_department')}"></div>
+        </div>
 
-      <div class="section-title mb-2 mt-2">👁️ Visibilité</div>
-      <div class="form-group">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="p-roi" ${gs('show_roi_public')==='true'?'checked':''}>
-          <span class="form-label" style="margin:0">Afficher les ROI aux visiteurs</span>
-        </label>
+        <div class="card mb-2">
+          <div class="section-title mb-2">📬 Contact</div>
+          <div class="form-group"><label class="form-label">Email de contact principal</label>
+            <input class="form-control" type="email" id="p-email" value="${gs('app_contact_email')}"></div>
+          <div class="form-group"><label class="form-label">CC (séparés par virgules)</label>
+            <input class="form-control" id="p-cc" value="${gs('app_contact_cc')}" placeholder="email1@, email2@"></div>
+          <div class="form-group"><label class="form-label">Objet du mail</label>
+            <input class="form-control" id="p-subject" value="${gs('app_contact_subject')||'Demande d\'information'}"></div>
+          <div class="form-group"><label class="form-label">Corps du mail (optionnel)</label>
+            <textarea class="form-control" id="p-body" rows="3">${gs('app_contact_body')}</textarea></div>
+        </div>
+
+        <div class="card mb-2">
+          <div class="section-title mb-2">👁️ Visibilité</div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="p-roi" ${gs('show_roi_public')==='true'?'checked':''}>
+            <span class="form-label" style="margin:0">Afficher les ROI aux visiteurs</span>
+          </label>
+        </div>
       </div>
 
-      <div class="flex gap-1 mt-2">
-        <button class="btn btn-primary" id="p-save">💾 Enregistrer</button>
-        <button class="btn btn-danger" id="p-reset" style="margin-left:auto">🗑️ Réinitialiser la base de données</button>
+      <!-- Colonne droite -->
+      <div>
+        <div class="card mb-2">
+          <div class="section-title mb-2">🌐 Langue de l'interface</div>
+          <div class="form-group"><label class="form-label">Langue</label>
+            <select class="form-control" id="p-lang">
+              <option value="fr" ${gs('app_lang')==='fr'?'selected':''}>🇫🇷 Français</option>
+              <option value="en" ${gs('app_lang')==='en'?'selected':''}>🇬🇧 English</option>
+              <option value="de" ${gs('app_lang')==='de'?'selected':''}>🇩🇪 Deutsch</option>
+            </select>
+            <div class="form-hint">L'interface sera rechargée après sauvegarde.</div>
+          </div>
+        </div>
+
+        <div class="card mb-2">
+          <div class="section-title mb-2">🏴 Mode bilingue FR / DE</div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px">
+            <input type="checkbox" id="p-bilingual" ${gs('bilingual_mode')==='true'?'checked':''}>
+            <span class="form-label" style="margin:0">Activer le mode bilingue KNDS FR/DE</span>
+          </label>
+          <div class="form-group"><label class="form-label">Libellé onglet France</label>
+            <input class="form-control" id="p-tab-fr" value="${gs('special_tab_fr')||'Spécial France'}" placeholder="Spécial France"></div>
+          <div class="form-group"><label class="form-label">Libellé onglet Allemagne</label>
+            <input class="form-control" id="p-tab-de" value="${gs('special_tab_de')||'Spécial Allemagne'}" placeholder="Spécial Allemagne"></div>
+          <div class="form-hint">Les CU marqués comme "Spécial FR" ou "Spécial DE" apparaissent dans l'onglet correspondant.</div>
+        </div>
+
+        <div class="card mb-2">
+          <div class="section-title mb-2">☁️ Synchronisation GitHub Gist</div>
+          <div class="alert alert-info" style="font-size:12px;margin-bottom:12px;">
+            La base de données est chiffrée en base64 et stockée dans un Gist <strong>privé</strong>.
+            Créez un token PAT avec le scope <code>gist</code> uniquement sur <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a>.
+          </div>
+          <div class="form-group"><label class="form-label">ID du Gist <span class="text-muted">(laissez vide pour en créer un nouveau)</span></label>
+            <input class="form-control" id="p-gist-id" value="${gs('gist_id')}" placeholder="abc123def456…"></div>
+          <div class="form-group"><label class="form-label">Token GitHub (PAT)</label>
+            <div style="position:relative">
+              <input class="form-control" type="password" id="p-gist-token" value="${gs('gist_token')}" placeholder="ghp_…" style="padding-right:80px">
+              <button class="btn btn-ghost btn-sm" onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.previousElementSibling.type==='password'?'👁 Voir':'🙈 Masquer'" style="position:absolute;right:4px;top:4px;font-size:11px;">👁 Voir</button>
+            </div>
+          </div>
+          <div class="flex gap-1 mt-1">
+            <button class="btn btn-outline btn-sm" id="p-gist-push">⬆️ Sauvegarder vers Gist</button>
+            <button class="btn btn-outline btn-sm" id="p-gist-pull">⬇️ Restaurer depuis Gist</button>
+            <button class="btn btn-ghost btn-sm" id="p-gist-info">ℹ️ Statut</button>
+          </div>
+          <div id="p-gist-status" style="font-size:12px;margin-top:8px;color:var(--text-muted);"></div>
+        </div>
       </div>
+    </div>
+
+    <div style="max-width:1000px;display:flex;gap:8px;padding-bottom:24px;">
+      <button class="btn btn-primary" id="p-save">💾 Enregistrer les paramètres</button>
+      <button class="btn btn-danger" id="p-reset" style="margin-left:auto">🗑️ Réinitialiser la base de données</button>
     </div>
   `;
 
+  // ── Save ──────────────────────────────────────────────────────────────────
   container.querySelector('#p-save').addEventListener('click', async () => {
-    await ss('app_name', container.querySelector('#p-name').value);
-    await ss('app_department', container.querySelector('#p-dept').value);
+    await ss('app_name',          container.querySelector('#p-name').value);
+    await ss('app_department',    container.querySelector('#p-dept').value);
     await ss('app_contact_email', container.querySelector('#p-email').value);
-    await ss('app_contact_cc', container.querySelector('#p-cc').value);
+    await ss('app_contact_cc',    container.querySelector('#p-cc').value);
     await ss('app_contact_subject', container.querySelector('#p-subject').value);
-    await ss('app_contact_body', container.querySelector('#p-body').value);
-    await ss('show_roi_public', container.querySelector('#p-roi').checked ? 'true' : 'false');
-    toast('Paramètres enregistrés.', 'success');
+    await ss('app_contact_body',  container.querySelector('#p-body').value);
+    await ss('show_roi_public',   container.querySelector('#p-roi').checked ? 'true' : 'false');
+    await ss('app_lang',          container.querySelector('#p-lang').value);
+    await ss('bilingual_mode',    container.querySelector('#p-bilingual').checked ? 'true' : 'false');
+    await ss('special_tab_fr',    container.querySelector('#p-tab-fr').value || 'Spécial France');
+    await ss('special_tab_de',    container.querySelector('#p-tab-de').value || 'Spécial Allemagne');
+    await ss('gist_id',           container.querySelector('#p-gist-id').value.trim());
+    await ss('gist_token',        container.querySelector('#p-gist-token').value.trim());
+    toast('Paramètres enregistrés. Rechargement…', 'success');
+    setTimeout(() => location.reload(), 900);
+  });
+
+  // ── Gist push ─────────────────────────────────────────────────────────────
+  container.querySelector('#p-gist-push').addEventListener('click', async () => {
+    // Save token/id first
+    await ss('gist_id',    container.querySelector('#p-gist-id').value.trim());
+    await ss('gist_token', container.querySelector('#p-gist-token').value.trim());
+    const statusEl = container.querySelector('#p-gist-status');
+    statusEl.textContent = '⏳ Sauvegarde en cours…';
+    const { pushToGist } = await import('../modules/gist.js');
+    const r = await pushToGist();
+    if (r.ok) {
+      await ss('gist_id', r.gist_id);
+      container.querySelector('#p-gist-id').value = r.gist_id;
+      statusEl.innerHTML = `✅ Sauvegardé le ${new Date(r.updated_at).toLocaleString('fr-FR')} — ID : <code>${r.gist_id}</code>`;
+      toast('Base sauvegardée sur GitHub Gist.', 'success');
+    } else {
+      statusEl.textContent = `❌ ${r.msg}`;
+      toast(r.msg, 'danger');
+    }
+  });
+
+  // ── Gist pull ─────────────────────────────────────────────────────────────
+  container.querySelector('#p-gist-pull').addEventListener('click', async () => {
+    if (!confirm('⚠️ Restaurer depuis le Gist va écraser toutes les données locales. Continuer ?')) return;
+    await ss('gist_id',    container.querySelector('#p-gist-id').value.trim());
+    await ss('gist_token', container.querySelector('#p-gist-token').value.trim());
+    const statusEl = container.querySelector('#p-gist-status');
+    statusEl.textContent = '⏳ Restauration en cours…';
+    const { pullFromGist } = await import('../modules/gist.js');
+    const r = await pullFromGist();
+    if (r.ok) {
+      statusEl.textContent = `✅ Restauré depuis le ${new Date(r.updated_at).toLocaleString('fr-FR')} — rechargement…`;
+      toast('Restauration réussie.', 'success');
+      // importDBBase64 triggers location.reload() internally
+    } else {
+      statusEl.textContent = `❌ ${r.msg}`;
+      toast(r.msg, 'danger');
+    }
+  });
+
+  // ── Gist status ───────────────────────────────────────────────────────────
+  container.querySelector('#p-gist-info').addEventListener('click', async () => {
+    await ss('gist_id',    container.querySelector('#p-gist-id').value.trim());
+    await ss('gist_token', container.querySelector('#p-gist-token').value.trim());
+    const statusEl = container.querySelector('#p-gist-status');
+    statusEl.textContent = '⏳ Récupération du statut…';
+    const { getGistInfo } = await import('../modules/gist.js');
+    const r = await getGistInfo();
+    if (r.ok) {
+      statusEl.innerHTML = `ℹ️ Dernière mise à jour : ${new Date(r.updated_at).toLocaleString('fr-FR')} — Fichier présent : ${r.has_file ? '✅' : '❌'}`;
+    } else {
+      statusEl.textContent = `❌ ${r.msg}`;
+    }
   });
 
   container.querySelector('#p-reset').addEventListener('click', async () => {
