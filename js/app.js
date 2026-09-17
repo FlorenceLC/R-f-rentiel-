@@ -2,8 +2,9 @@
  * Main app — router, sidebar, boot sequence
  */
 import { initDB, getSetting, query, queryOne } from './modules/db.js';
-import { isLoggedIn, isAdmin, isVisitor, getCurrentUser, getCurrentUsername, logout, loginVisitor, loginAdmin } from './modules/auth.js';
+import { isLoggedIn, isAdmin, isVisitor, getCurrentUser, getCurrentUsername, getUserPays, logout, loginVisitor, loginAdmin } from './modules/auth.js';
 import { el, setHTML, toast } from './modules/ui.js';
+import { setLang, getLang, t } from './modules/i18n.js';
 
 // ── Page imports ──────────────────────────────────────────
 import { renderAccueil }         from './pages/accueil.js';
@@ -12,6 +13,7 @@ import { renderDemande }         from './pages/demande.js';
 import { renderApplications }    from './pages/applications.js';
 import { renderAssistant }       from './pages/assistant.js';
 import { renderGuide, renderFAQ } from './pages/guide.js';
+import { renderSpecial }          from './pages/special.js';
 import { renderAdminDemandes }   from './admin/demandes.js';
 import { renderAdminCatalogue }  from './admin/catalogue.js';
 import { renderAdminReferentiels } from './admin/referentiels.js';
@@ -33,6 +35,7 @@ const PAGES = {
   assistant:           { fn: renderAssistant,         label: '🤖 Assistant IA',     admin: false },
   guide:               { fn: renderGuide,             label: '📖 Guide',            admin: false },
   faq:                 { fn: renderFAQ,               label: '❓ FAQ',               admin: false },
+  special:             { fn: renderSpecial,           label: '🌍 Spécial',           admin: false },
   admin_demandes:      { fn: renderAdminDemandes,     label: '🔔 Demandes',         admin: true  },
   admin_catalogue:     { fn: renderAdminCatalogue,    label: '🗂️ Catalogue',         admin: true  },
   admin_archives:      { fn: renderAdminArchives,     label: '📦 Archives',         admin: true  },
@@ -102,10 +105,27 @@ function _render() {
 // ── Sidebar ───────────────────────────────────────────────
 
 function _buildSidebar() {
-  const appName   = getSetting('app_name', 'Référentiel CU');
-  const dept      = getSetting('app_department', '');
-  const username  = getCurrentUsername();
-  const admin     = isAdmin();
+  const appName      = getSetting('app_name', 'Référentiel CU');
+  const dept         = getSetting('app_department', '');
+  const username     = getCurrentUsername();
+  const admin        = isAdmin();
+  const bilingual    = getSetting('bilingual_mode', 'false') === 'true';
+  const userPays     = getUserPays();
+  const tabFRLabel   = getSetting('special_tab_fr', 'Spécial France');
+  const tabDELabel   = getSetting('special_tab_de', 'Spécial Allemagne');
+
+  // Determine special tab label for this user
+  let specialLabel = null;
+  if (bilingual) {
+    if (admin) {
+      // Admin sees both — show both labels or generic
+      specialLabel = `🌍 ${t('nav.special')}`;
+    } else if (userPays === 'FR') {
+      specialLabel = `🇫🇷 ${tabFRLabel}`;
+    } else if (userPays === 'DE') {
+      specialLabel = `🇩🇪 ${tabDELabel}`;
+    }
+  }
 
   // Pending badge
   let pendingBadge = '';
@@ -117,25 +137,26 @@ function _buildSidebar() {
   }
 
   const publicNav = `
-    <div class="nav-section-label">Navigation</div>
-    <button class="nav-item" data-page="accueil"><span class="nav-icon">🏠</span> Accueil</button>
-    <button class="nav-item" data-page="catalogue"><span class="nav-icon">📚</span> Catalogue</button>
-    <button class="nav-item" data-page="applications"><span class="nav-icon">🚀</span> Applications</button>
-    <button class="nav-item" data-page="demande"><span class="nav-icon">📝</span> Soumettre un besoin</button>
-    <button class="nav-item" data-page="assistant"><span class="nav-icon">🤖</span> Assistant IA</button>
-    <button class="nav-item" data-page="guide"><span class="nav-icon">📖</span> Guide</button>
-    <button class="nav-item" data-page="faq"><span class="nav-icon">❓</span> FAQ</button>
+    <div class="nav-section-label">${t('nav.admin') === 'Administration' ? 'Navigation' : 'Navigation'}</div>
+    <button class="nav-item" data-page="accueil"><span class="nav-icon">🏠</span> ${t('nav.home')}</button>
+    <button class="nav-item" data-page="catalogue"><span class="nav-icon">📚</span> ${t('nav.catalogue')}</button>
+    <button class="nav-item" data-page="applications"><span class="nav-icon">🚀</span> ${t('nav.applications')}</button>
+    <button class="nav-item" data-page="demande"><span class="nav-icon">📝</span> ${t('nav.submit')}</button>
+    <button class="nav-item" data-page="assistant"><span class="nav-icon">🤖</span> ${t('nav.assistant')}</button>
+    <button class="nav-item" data-page="guide"><span class="nav-icon">📖</span> ${t('nav.guide')}</button>
+    <button class="nav-item" data-page="faq"><span class="nav-icon">❓</span> ${t('nav.faq')}</button>
+    ${specialLabel ? `<button class="nav-item" data-page="special"><span class="nav-icon">🌍</span> ${specialLabel}</button>` : ''}
   `;
 
   const adminNav = admin ? `
-    <div class="nav-section-label mt-2">Administration</div>
-    <button class="nav-item" data-page="admin_demandes"><span class="nav-icon">🔔</span> Demandes ${pendingBadge}</button>
-    <button class="nav-item" data-page="admin_catalogue"><span class="nav-icon">🗂️</span> Catalogue</button>
-    <button class="nav-item" data-page="admin_archives"><span class="nav-icon">📦</span> Archives</button>
-    <button class="nav-item" data-page="admin_referentiels"><span class="nav-icon">🔧</span> Référentiels</button>
-    <button class="nav-item" data-page="admin_utilisateurs"><span class="nav-icon">👥</span> Utilisateurs</button>
-    <button class="nav-item" data-page="admin_params_ia"><span class="nav-icon">🤖</span> Paramètres IA</button>
-    <button class="nav-item" data-page="admin_params"><span class="nav-icon">⚙️</span> Paramètres</button>
+    <div class="nav-section-label mt-2">${t('nav.admin')}</div>
+    <button class="nav-item" data-page="admin_demandes"><span class="nav-icon">🔔</span> ${t('nav.admin.requests')} ${pendingBadge}</button>
+    <button class="nav-item" data-page="admin_catalogue"><span class="nav-icon">🗂️</span> ${t('nav.admin.catalogue')}</button>
+    <button class="nav-item" data-page="admin_archives"><span class="nav-icon">📦</span> ${t('nav.admin.archives')}</button>
+    <button class="nav-item" data-page="admin_referentiels"><span class="nav-icon">🔧</span> ${t('nav.admin.referentiels')}</button>
+    <button class="nav-item" data-page="admin_utilisateurs"><span class="nav-icon">👥</span> ${t('nav.admin.users')}</button>
+    <button class="nav-item" data-page="admin_params_ia"><span class="nav-icon">🤖</span> ${t('nav.admin.params_ia')}</button>
+    <button class="nav-item" data-page="admin_params"><span class="nav-icon">⚙️</span> ${t('nav.admin.params')}</button>
   ` : '';
 
   return `
@@ -249,6 +270,9 @@ export async function boot() {
   const loadingEl = el('loading');
   try {
     await initDB();
+    // Apply saved language
+    const savedLang = getSetting('app_lang', 'fr');
+    setLang(savedLang);
     if (loadingEl) loadingEl.style.display = 'none';
     _render();
   } catch (e) {
