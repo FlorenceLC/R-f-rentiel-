@@ -22,11 +22,13 @@ export async function initDB() {
   const SQL = await window.initSqlJs({
     locateFile: f => base + f
   });
+  _SQL = SQL; // cache for importDBBase64
 
   const saved = await _idbLoad();
   if (saved) {
     _db = new SQL.Database(saved);
     console.log('[DB] restored from IndexedDB');
+    _migrate(); // apply new columns on existing DBs
   } else {
     _db = new SQL.Database();
     console.log('[DB] fresh database');
@@ -36,6 +38,48 @@ export async function initDB() {
   }
 
   return _db;
+}
+
+// Keep reference to SQL for importDBBase64
+let _SQL = null;
+async function initSQL() {
+  if (_SQL) return _SQL;
+  const base = (() => {
+    const scripts = [...document.querySelectorAll('script[src]')];
+    const sqlScript = scripts.find(s => s.src.includes('sql-wasm'));
+    if (sqlScript) return sqlScript.src.replace('sql-wasm.js', '');
+    return window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+  })();
+  _SQL = await window.initSqlJs({ locateFile: f => base + f });
+  return _SQL;
+}
+
+/** Add new columns to existing DBs without losing data */
+function _migrate() {
+  const addCol = (table, col, def) => {
+    try { _db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); } catch {}
+  };
+  // New columns for multi-country support
+  addCol('users',     'pays TEXT DEFAULT NULL');            // FR | DE | null
+  addCol('use_cases', 'origine TEXT DEFAULT NULL');         // FR | DE | null
+  addCol('use_cases', 'visibilite TEXT DEFAULT "common"');  // common | FR | DE
+  addCol('requests',  'entite TEXT DEFAULT NULL');          // KNDS FR | KNDS DE
+
+  // New settings
+  const newSettings = [
+    ['app_lang',          'fr',    'Langue de l\'interface (fr/en/de)', 'string'],
+    ['bilingual_mode',    'false', 'Mode bilingue FR/DE activé',        'boolean'],
+    ['special_tab_fr',    'Spécial France',     'Libellé onglet spécial France',     'string'],
+    ['special_tab_de',    'Spécial Allemagne',  'Libellé onglet spécial Allemagne',  'string'],
+    ['gist_id',           '',      'ID du Gist GitHub',     'string'],
+    ['gist_token',        '',      'Token GitHub PAT',      'string'],
+    ['show_roi_public',   'false', 'Afficher les ROI aux visiteurs', 'boolean'],
+  ];
+  newSettings.forEach(([k,v,d,t]) => {
+    try {
+      _db.run(`INSERT OR IGNORE INTO settings(cle,valeur,description,type_valeur) VALUES(?,?,?,?)`, [k,v,d,t]);
+    } catch {}
+  });
 }
 
 /** Run schema and seed if new DB */
@@ -246,8 +290,14 @@ function _seedData() {
     ['ai_api_key','','Clé API IA','string'],
     ['ai_model','gpt-4','Modèle IA à utiliser','string'],
     ['ai_gravitee_key','','Clé Gravitee API Gateway (X-Gravitee-Api-Key)','string'],
-    ['show_roi_public','true','Afficher les ROI aux visiteurs','boolean'],
-    ['max_similar_results','5','Nombre maximum de CU similaires','integer'],
+    ['show_roi_public',   'false', 'Afficher les ROI aux visiteurs',         'boolean'],
+    ['max_similar_results','5',   'Nombre maximum de CU similaires',          'integer'],
+    ['app_lang',          'fr',   'Langue de l\'interface (fr/en/de)',        'string'],
+    ['bilingual_mode',    'false','Mode bilingue FR/DE activé',               'boolean'],
+    ['special_tab_fr',    'Spécial France',    'Libellé onglet spécial France',    'string'],
+    ['special_tab_de',    'Spécial Allemagne', 'Libellé onglet spécial Allemagne', 'string'],
+    ['gist_id',           '',     'ID du Gist GitHub',                        'string'],
+    ['gist_token',        '',     'Token GitHub PAT',                         'string'],
   ];
   settings.forEach(([k,v,d,t]) => {
     _db.run(`INSERT OR IGNORE INTO settings(cle,valeur,description,type_valeur) VALUES(?,?,?,?)`, [k,v,d,t]);
@@ -258,6 +308,27 @@ function _seedData() {
 export async function saveDB() {
   if (!_db) return;
   await _idbSave();
+}
+
+/** Export current DB as base64 string (for Gist backup) */
+export async function exportDBBase64() {
+  if (!_db) throw new Error('DB not initialised');
+  const data = _db.export(); // Uint8Array
+  let binary = '';
+  for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+  return btoa(binary);
+}
+
+/** Import DB from base64 string (from Gist restore) — replaces current DB */
+export async function importDBBase64(b64) {
+  const binary = atob(b64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const SQL = await initSQL();
+  _db = new SQL.Database(bytes);
+  await _idbSave();
+  // Reload page so all in-memory state is refreshed
+  location.reload();
 }
 
 /** Execute a SELECT and return array of row objects */
@@ -284,17 +355,21 @@ export function run(sql, params = []) {
 }
 
 /** Generate next CU-XXXX id */
-export function nextCuId() {
+export function nextCuId(pays = null) {
   run(`UPDATE cu_seq SET val = val + 1`);
-  const row = queryOne(`SELECT val FROM cu_seq`);
-  return `CU-${String(row.val).padStart(4,'0')}`;
+  const row    = queryOne(`SELECT val FROM cu_seq`);
+  const num    = String(row.val).padStart(4, '0');
+  const suffix = pays ? `-${pays.toUpperCase()}` : '';
+  return `CU-${num}${suffix}`;
 }
 
-/** Generate next DEM-XXXX id */
-export function nextDemId() {
+/** Generate next DEM-XXXX[-FR|-DE] id */
+export function nextDemId(pays = null) {
   run(`UPDATE dem_seq SET val = val + 1`);
-  const row = queryOne(`SELECT val FROM dem_seq`);
-  return `DEM-${String(row.val).padStart(4,'0')}`;
+  const row    = queryOne(`SELECT val FROM dem_seq`);
+  const num    = String(row.val).padStart(4, '0');
+  const suffix = pays ? `-${pays.toUpperCase()}` : '';
+  return `DEM-${num}${suffix}`;
 }
 
 /** Get a setting value */

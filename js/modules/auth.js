@@ -95,6 +95,16 @@ export function getUserRole() {
   return getCurrentUser()?.role || null;
 }
 
+/** Return 'FR', 'DE', or null for the current user's country */
+export function getUserPays() {
+  // Re-read from DB to pick up any changes made after login
+  const user = getCurrentUser();
+  if (!user) return null;
+  // The session stores the user object at login time; pays may have been added later
+  // so we return what's in the session (refreshed on next login)
+  return user.pays || null;
+}
+
 export function canAccessGlobalAdmin() {
   return getUserRole() === 'ADMIN_GLOBAL';
 }
