@@ -1,7 +1,8 @@
-import { query, queryOne, run, nextDemId, saveDB } from '../modules/db.js';
+import { query, queryOne, run, nextDemId, saveDB, getSetting } from '../modules/db.js';
 import { analyzeRequest, isAIAvailable } from '../modules/ai.js';
 import { toast, spinner, alertBox, statusBadge, formatROI, chip } from '../modules/ui.js';
 import { navigate } from '../app.js';
+import { t } from '../modules/i18n.js';
 
 let _step = 1;
 let _data = {};
@@ -32,16 +33,27 @@ function _renderStep(container) {
 }
 
 function _buildStep() {
-  if (_step === 1) return `
+  if (_step === 1) {
+    const bilingual = getSetting('bilingual_mode', 'false') === 'true';
+    const entityField = bilingual ? `
+      <div class="form-group"><label class="form-label">${t('request.field.entity')} <span class="required">*</span></label>
+        <select class="form-control" id="f-entite">
+          <option value="" ${!_data.entite?'selected':''}>— Sélectionnez votre entité —</option>
+          <option value="FR" ${_data.entite==='FR'?'selected':''}>🇫🇷 ${t('request.entity.fr')}</option>
+          <option value="DE" ${_data.entite==='DE'?'selected':''}>🇩🇪 ${t('request.entity.de')}</option>
+        </select></div>` : '';
+
+    return `
     <div class="form-grid form-grid-2">
-      <div class="form-group"><label class="form-label">Nom <span class="required">*</span></label>
+      <div class="form-group"><label class="form-label">${t('request.field.lastname')} <span class="required">*</span></label>
         <input class="form-control" id="f-nom" value="${_data.nom||''}" placeholder="Votre nom" required></div>
-      <div class="form-group"><label class="form-label">Prénom <span class="required">*</span></label>
+      <div class="form-group"><label class="form-label">${t('request.field.firstname')} <span class="required">*</span></label>
         <input class="form-control" id="f-prenom" value="${_data.prenom||''}" placeholder="Votre prénom" required></div>
-      <div class="form-group"><label class="form-label">Email <span class="required">*</span></label>
+      <div class="form-group"><label class="form-label">${t('request.field.email')} <span class="required">*</span></label>
         <input class="form-control" type="email" id="f-email" value="${_data.email||''}" placeholder="vous@entreprise.fr" required></div>
-      <div class="form-group"><label class="form-label">Direction / Service <span class="required">*</span></label>
+      <div class="form-group"><label class="form-label">${t('request.field.direction')} <span class="required">*</span></label>
         <input class="form-control" id="f-direction" value="${_data.direction||''}" placeholder="Ex: Direction Finance" required></div>
+      ${entityField}
     </div>
     <div class="flex justify-end mt-2">
       <button class="btn btn-primary" id="btn-next">Suivant →</button>
@@ -103,6 +115,7 @@ function _buildStep() {
     <div class="card" style="background:var(--gray-light);border:none;">
       <div><strong>Référence :</strong> <span class="cu-id-tag">${_data.dem_id||'—'}</span></div>
       <div class="mt-1"><strong>Demandeur :</strong> ${_data.prenom} ${_data.nom} — ${_data.direction}</div>
+      ${_data.entite ? `<div class="mt-1"><strong>Entité :</strong> ${_data.entite==='FR'?'🇫🇷 KNDS France':'🇩🇪 KNDS Allemagne'}</div>` : ''}
       <div class="mt-1"><strong>Objectif :</strong> ${_data.objectif}</div>
       ${_aiResult ? `<div class="mt-1"><strong>Type de besoin (IA) :</strong> ${_aiResult.type_besoin||'—'}</div>` : ''}
     </div>
@@ -164,12 +177,16 @@ function _bindStep(container) {
 
 function _validateStep(stepEl) {
   if (_step === 1) {
-    const nom = stepEl.querySelector('#f-nom')?.value.trim();
+    const nom    = stepEl.querySelector('#f-nom')?.value.trim();
     const prenom = stepEl.querySelector('#f-prenom')?.value.trim();
-    const email = stepEl.querySelector('#f-email')?.value.trim();
-    const dir = stepEl.querySelector('#f-direction')?.value.trim();
+    const email  = stepEl.querySelector('#f-email')?.value.trim();
+    const dir    = stepEl.querySelector('#f-direction')?.value.trim();
     if (!nom || !prenom || !email || !dir) {
       toast('Veuillez remplir tous les champs obligatoires.', 'danger'); return false;
+    }
+    const bilingual = getSetting('bilingual_mode', 'false') === 'true';
+    if (bilingual && !stepEl.querySelector('#f-entite')?.value) {
+      toast('Veuillez sélectionner votre entité (KNDS France ou KNDS Allemagne).', 'danger'); return false;
     }
   }
   if (_step === 2) {
@@ -188,6 +205,7 @@ function _collectStep(stepEl) {
     _data.prenom    = stepEl.querySelector('#f-prenom')?.value.trim();
     _data.email     = stepEl.querySelector('#f-email')?.value.trim();
     _data.direction = stepEl.querySelector('#f-direction')?.value.trim();
+    _data.entite    = stepEl.querySelector('#f-entite')?.value || null; // 'FR' | 'DE' | null
   }
   if (_step === 2) {
     _data.contexte          = stepEl.querySelector('#f-contexte')?.value.trim();
@@ -290,16 +308,17 @@ async function _runAI(container) {
 }
 
 function _saveRequest() {
-  const dem_id = nextDemId();
+  const pays   = _data.entite || null;           // 'FR' | 'DE' | null
+  const dem_id = nextDemId(pays);
   _data.dem_id = dem_id;
   run(`INSERT INTO requests
-    (dem_id,nom,prenom,email,direction,contexte,objectif,commentaire,
+    (dem_id,nom,prenom,email,direction,entite,contexte,objectif,commentaire,
      temps_actuel,unite_temps,nombre_personnes,volume_annuel,roi_estime,
      disponibilite,date_disponibilite,type_besoin_ia,technologie_ia,analyse_ia,
      similar_cases,has_similarities,similarity_acknowledged,statut)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'À analyser')`,
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'À analyser')`,
     [
-      dem_id, _data.nom, _data.prenom, _data.email, _data.direction,
+      dem_id, _data.nom, _data.prenom, _data.email, _data.direction, pays,
       _data.contexte, _data.objectif, _data.commentaire||null,
       _data.temps_actuel||null, _data.unite_temps||null,
       _data.nombre_personnes||null, _data.volume_annuel||null, _data.roi_estime||null,

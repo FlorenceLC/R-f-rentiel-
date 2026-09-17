@@ -2,6 +2,7 @@ import { query, queryOne, getSetting } from '../modules/db.js';
 import { statusBadge, formatDate, formatROI, truncate, chip, sectionTitle, pagination, emptyState, alertBox, tabs } from '../modules/ui.js';
 import { isAdmin } from '../modules/auth.js';
 import { navigate, setPageParam } from '../app.js';
+import { t, originLabel, visibilityLabel } from '../modules/i18n.js';
 
 const PAGE_SIZE = 25;
 
@@ -154,7 +155,7 @@ function _cuTable(rows) {
   return `<div class="table-wrap">
     <table class="data-table">
       <thead><tr>
-        <th>ID</th><th>Nom</th><th>Statut</th><th>Type</th><th>Technologie</th><th>Responsable</th>${admin ? '<th>ROI/an</th>' : ''}<th>Date</th>
+        <th>ID</th><th>Nom</th><th>Statut</th><th>Type</th><th>Technologie</th><th>Responsable</th>${admin ? '<th>ROI/an</th>' : ''}<th>Origine</th><th>Date</th>
       </tr></thead>
       <tbody>
         ${rows.map(cu => `<tr style="cursor:pointer" onclick="navigate('catalogue',{cu_id:'${cu.cu_id}'})">
@@ -165,6 +166,7 @@ function _cuTable(rows) {
           <td>${chip(cu.technologie,'tech')}</td>
           <td class="text-sm text-muted">${cu.responsable||'—'}</td>
           ${admin ? `<td class="text-sm" style="color:var(--green);font-weight:600">${cu.roi_annuel?formatROI(cu.roi_annuel):'—'}</td>` : ''}
+          <td class="text-sm">${originLabel(cu.origine)}</td>
           <td class="text-sm text-muted">${formatDate(cu.date_creation)}</td>
         </tr>`).join('')}
       </tbody>
@@ -214,6 +216,8 @@ function _renderDetail(container, cuId) {
         <div class="detail-item"><div class="di-label">Responsable</div><div class="di-value">${cu.responsable||'—'}</div></div>
         <div class="detail-item"><div class="di-label">Pilote métier</div><div class="di-value">${cu.pilote_metier||'—'}</div></div>
         <div class="detail-item"><div class="di-label">Date de création</div><div class="di-value">${formatDate(cu.date_creation)}</div></div>
+        ${cu.origine ? `<div class="detail-item"><div class="di-label">Origine</div><div class="di-value">${originLabel(cu.origine)}</div></div>` : ''}
+        ${cu.visibilite && cu.visibilite !== 'common' ? `<div class="detail-item"><div class="di-label">Visibilité</div><div class="di-value">${visibilityLabel(cu.visibilite)}</div></div>` : ''}
       </div>
 
       ${admin && (cu.roi_annuel || cu.gain_estime) ? `

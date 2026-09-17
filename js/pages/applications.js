@@ -1,6 +1,7 @@
 import { query } from '../modules/db.js';
 import { chip, emptyState, truncate, sectionTitle } from '../modules/ui.js';
 import { navigate } from '../app.js';
+import { originLabel } from '../modules/i18n.js';
 
 export function renderApplications(container) {
   const apps = query(`SELECT * FROM use_cases WHERE actif=1 AND statut='Production' AND application_disponible=1 ORDER BY date_creation DESC`);
@@ -21,6 +22,7 @@ export function renderApplications(container) {
               <div style="font-size:2rem;">🚀</div>
               <div style="flex:1">
                 <div style="font-weight:700;color:var(--blue-dark)">${app.nom}</div>
+                ${app.origine ? `<div class="text-sm" style="color:var(--text-muted);margin-top:2px;">Origine : ${originLabel(app.origine)}</div>` : ''}
                 <div class="text-muted text-sm mt-1">${truncate(app.description,100)}</div>
                 <div class="flex gap-1 mt-2 flex-wrap">
                   ${chip(app.type_besoin,'type')}
