@@ -58,6 +58,7 @@ function _buildStep() {
     <div class="flex justify-end mt-2">
       <button class="btn btn-primary" id="btn-next">Suivant →</button>
     </div>`;
+  }
 
   if (_step === 2) return `
     <div class="form-group"><label class="form-label">Contexte actuel <span class="required">*</span></label>
