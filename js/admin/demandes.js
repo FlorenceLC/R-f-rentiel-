@@ -217,18 +217,23 @@ window._openDemande = (demId) => {
   });
 
   document.querySelector('#btn-validate').addEventListener('click', () => {
-    const type  = document.querySelector('#adm-type').value;
-    const tech  = document.querySelector('#adm-tech').value;
-    const sujet = document.querySelector('#adm-sujet').value;
-    const resp  = document.querySelector('#adm-resp').value;
-    const pilote = document.querySelector('#adm-pilote').value;
-    const jira  = document.querySelector('#adm-jira').value;
-    const roi   = parseFloat(document.querySelector('#adm-roi').value) || null;
-    _validateRequest(r, { type, tech, sujet, resp, pilote, jira, roi });
-    closeModal();
-    toast('Demande validée — CU créé.', 'success');
-    const cont = document.querySelector('#main-content');
-    if (cont) _renderList(cont);
+    try {
+      const type   = document.querySelector('#adm-type').value;
+      const tech   = document.querySelector('#adm-tech').value;
+      const sujet  = document.querySelector('#adm-sujet').value;
+      const resp   = document.querySelector('#adm-resp').value;
+      const pilote = document.querySelector('#adm-pilote').value;
+      const jira   = document.querySelector('#adm-jira').value;
+      const roi    = parseFloat(document.querySelector('#adm-roi').value) || null;
+      _validateRequest(r, { type, tech, sujet, resp, pilote, jira, roi });
+      closeModal();
+      toast('Demande validée — CU créé.', 'success');
+      const cont = document.querySelector('#main-content');
+      if (cont) _renderList(cont);
+    } catch(e) {
+      console.error('Erreur validate:', e);
+      toast(`Erreur : ${e.message}`, 'danger');
+    }
   });
 }
 

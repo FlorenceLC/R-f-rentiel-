@@ -19,7 +19,14 @@ const STATUS_CLASSES = {
 
 export function statusBadge(status) {
   const cls = STATUS_CLASSES[status] || 'badge-besoin';
-  return `<span class="badge ${cls}">${status}</span>`;
+  // Import t lazily to avoid circular deps — i18n module caches the lang
+  try {
+    const { statusLabel } = window._i18n || {};
+    const label = statusLabel ? statusLabel(status) : status;
+    return `<span class="badge ${cls}">${label}</span>`;
+  } catch {
+    return `<span class="badge ${cls}">${status}</span>`;
+  }
 }
 
 // ── Formatting ────────────────────────────────────────────
@@ -27,7 +34,9 @@ export function statusBadge(status) {
 export function formatDate(d) {
   if (!d) return '—';
   try {
-    return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    const lang = window._i18n?.t ? (window.localStorage?.getItem('_rcu_lang') || 'fr') : 'fr';
+    const locale = lang === 'de' ? 'de-DE' : lang === 'en' ? 'en-GB' : 'fr-FR';
+    return new Date(d).toLocaleDateString(locale, { day:'2-digit', month:'2-digit', year:'numeric' });
   } catch { return d; }
 }
 

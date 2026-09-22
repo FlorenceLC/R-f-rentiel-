@@ -4,7 +4,7 @@
 import { initDB, getSetting, query, queryOne } from './modules/db.js';
 import { isLoggedIn, isAdmin, isVisitor, getCurrentUser, getCurrentUsername, getUserPays, logout, loginVisitor, loginAdmin } from './modules/auth.js';
 import { el, setHTML, toast, closeModal } from './modules/ui.js';
-import { setLang, getLang, t } from './modules/i18n.js';
+import { setLang, getLang, t, statusLabel, originLabel, visibilityLabel } from './modules/i18n.js';
 
 // ── Page imports ──────────────────────────────────────────
 import { renderAccueil }         from './pages/accueil.js';
@@ -287,7 +287,8 @@ export async function boot() {
 }
 
 // Expose navigate globally for inline onclick handlers
-window.navigate     = navigate;
+window.navigate      = navigate;
 window.getPageParams = getPageParams;
 window.setPageParam  = setPageParam;
 window.closeModal    = closeModal;
+window._i18n         = { t, statusLabel, originLabel, visibilityLabel };

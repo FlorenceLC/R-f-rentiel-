@@ -440,7 +440,10 @@ const TRANSLATIONS = {
 let _lang = 'fr';
 
 export function setLang(lang) {
-  if (TRANSLATIONS[lang]) _lang = lang;
+  if (TRANSLATIONS[lang]) {
+    _lang = lang;
+    try { localStorage.setItem('_rcu_lang', lang); } catch {}
+  }
 }
 
 export function getLang() { return _lang; }
@@ -465,4 +468,23 @@ export function visibilityLabel(v) {
   if (v === 'FR') return `🇫🇷 ${t('cu.visibility.fr')}`;
   if (v === 'DE') return `🇩🇪 ${t('cu.visibility.de')}`;
   return `🌍 ${t('cu.visibility.common')}`;
+}
+
+/** Map a DB status value to the current language label */
+export function statusLabel(status) {
+  const map = {
+    'Besoin identifié': 'status.identified',
+    'Cadrage':          'status.framing',
+    'POC':              'status.poc',
+    'En développement': 'status.dev',
+    'Production':       'status.prod',
+    'Abandonné':        'status.abandoned',
+  };
+  return map[status] ? t(map[status]) : (status || '—');
+}
+
+/** Translate a need type / technology if a key exists, else return as-is */
+export function fieldLabel(value) {
+  if (!value) return '—';
+  return value; // data values stay as-is; only UI chrome is translated
 }

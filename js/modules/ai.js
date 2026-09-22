@@ -1,7 +1,7 @@
 /**
  * AI service — supports two providers:
  *   1. OpenAI-compatible (internal Gravitee gateway, OpenAI, etc.)
- *   2. Google Gemini (gemini-2.5-flash-lite, etc.)
+ *   2. Google Gemini (gemini-3.5-flash-lite, etc.)
  *
  * Provider is detected automatically from the configured model name.
  */
@@ -51,7 +51,7 @@ export async function callAI(systemPrompt, userMessage, { temperature = 0.3, max
     if (provider === 'gemini') {
       // ── Gemini REST API ────────────────────────────────────────────────────
       // endpoint: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}
-      const geminiModel = model || 'gemini-2.5-flash-lite';
+      const geminiModel = model || 'gemini-3.5-flash-lite';
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${api_key}`;
 
       const body = {
@@ -159,7 +159,7 @@ export async function chatWithCatalogue(question, history, contextCU) {
     // Gemini: flatten history into a single context message
     const historyText = history.slice(-6).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
     const fullPrompt = `${systemPrompt}\n\n${historyText ? 'Historique:\n' + historyText + '\n\n' : ''}Question: ${question}`;
-    const geminiModel = model || 'gemini-2.5-flash-lite';
+    const geminiModel = model || 'gemini-3.5-flash-lite';
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${api_key}`;
     try {
       const resp = await fetch(endpoint, {

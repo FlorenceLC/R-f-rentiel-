@@ -91,6 +91,7 @@ function _createSchema() {
       password_hash TEXT NOT NULL,
       prenom TEXT, nom TEXT, email TEXT UNIQUE NOT NULL,
       role TEXT NOT NULL DEFAULT 'ADMIN_I',
+      pays TEXT DEFAULT NULL,
       type_sujet TEXT, actif INTEGER NOT NULL DEFAULT 1,
       date_creation TEXT DEFAULT (datetime('now')),
       date_modification TEXT DEFAULT (datetime('now')),
@@ -126,6 +127,7 @@ function _createSchema() {
       roi_annuel REAL, gain_estime TEXT, roi_complement TEXT,
       jira_url TEXT, application_disponible INTEGER DEFAULT 0,
       application_url TEXT, conditions_acces TEXT,
+      origine TEXT DEFAULT NULL, visibilite TEXT DEFAULT 'common',
       request_id INTEGER, actif INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS requests (
@@ -133,6 +135,7 @@ function _createSchema() {
       dem_id TEXT UNIQUE NOT NULL,
       nom TEXT NOT NULL, prenom TEXT NOT NULL,
       email TEXT NOT NULL, direction TEXT NOT NULL,
+      entite TEXT DEFAULT NULL,
       contexte TEXT NOT NULL, objectif TEXT NOT NULL, commentaire TEXT,
       temps_actuel REAL, unite_temps TEXT,
       nombre_personnes INTEGER, volume_annuel INTEGER,

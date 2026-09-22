@@ -198,47 +198,51 @@ function _openEditModal(cuId, container) {
   });
 
   document.querySelector('#cu-save').addEventListener('click', () => {
-    const nom = document.querySelector('#cu-nom').value.trim();
-    if (!nom) { toast('Le nom est obligatoire.', 'danger'); return; }
-    const data = {
-      nom,
-      statut:      document.querySelector('#cu-statut').value,
-      type_besoin: document.querySelector('#cu-type').value || null,
-      technologie: document.querySelector('#cu-tech').value || null,
-      type_sujet:  document.querySelector('#cu-sujet').value || null,
-      responsable: document.querySelector('#cu-resp').value || null,
-      pilote_metier: document.querySelector('#cu-pilote').value || null,
-      roi_annuel:  parseFloat(document.querySelector('#cu-roi').value) || null,
-      description: document.querySelector('#cu-desc').value || null,
-      gain_estime: document.querySelector('#cu-gain').value || null,
-      jira_url:    document.querySelector('#cu-jira').value || null,
-      application_disponible: document.querySelector('#cu-app').checked ? 1 : 0,
-      application_url: document.querySelector('#cu-app-url').value || null,
-      conditions_acces: document.querySelector('#cu-conditions').value || null,
-      origine:     document.querySelector('#cu-origine').value || null,
-      visibilite:  document.querySelector('#cu-visibilite').value || 'common',
-    };
-    if (isNew) {
-      const origine = data.origine || null;
-      const id = nextCuId(origine);
-      run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,conditions_acces,origine,visibilite)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
-         data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-         data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite]);
-      toast(`CU créé : ${id}`, 'success');
-    } else {
-      run(`UPDATE use_cases SET nom=?,statut=?,type_besoin=?,technologie=?,type_sujet=?,responsable=?,
-        pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
-        application_url=?,conditions_acces=?,origine=?,visibilite=?,date_modification=datetime('now') WHERE cu_id=?`,
-        [data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
-         data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-         data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite, cuId]);
-      toast(`${cuId} mis à jour.`, 'success');
+    try {
+      const nom = document.querySelector('#cu-nom').value.trim();
+      if (!nom) { toast('Le nom est obligatoire.', 'danger'); return; }
+      const data = {
+        nom,
+        statut:      document.querySelector('#cu-statut').value,
+        type_besoin: document.querySelector('#cu-type').value || null,
+        technologie: document.querySelector('#cu-tech').value || null,
+        type_sujet:  document.querySelector('#cu-sujet').value || null,
+        responsable: document.querySelector('#cu-resp').value || null,
+        pilote_metier: document.querySelector('#cu-pilote').value || null,
+        roi_annuel:  parseFloat(document.querySelector('#cu-roi').value) || null,
+        description: document.querySelector('#cu-desc').value || null,
+        gain_estime: document.querySelector('#cu-gain').value || null,
+        jira_url:    document.querySelector('#cu-jira').value || null,
+        application_disponible: document.querySelector('#cu-app').checked ? 1 : 0,
+        application_url: document.querySelector('#cu-app-url').value || null,
+        conditions_acces: document.querySelector('#cu-conditions').value || null,
+        origine:     document.querySelector('#cu-origine').value || null,
+        visibilite:  document.querySelector('#cu-visibilite').value || 'common',
+      };
+      if (isNew) {
+        const id = nextCuId(data.origine || null);
+        run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,conditions_acces,origine,visibilite)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [id, data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
+           data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
+           data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite]);
+        toast(`CU créé : ${id}`, 'success');
+      } else {
+        run(`UPDATE use_cases SET nom=?,statut=?,type_besoin=?,technologie=?,type_sujet=?,responsable=?,
+          pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
+          application_url=?,conditions_acces=?,origine=?,visibilite=?,date_modification=datetime('now') WHERE cu_id=?`,
+          [data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
+           data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
+           data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite, cuId]);
+        toast(`${cuId} mis à jour.`, 'success');
+      }
+      saveDB();
+      closeModal();
+      _refresh(container);
+    } catch(e) {
+      console.error('Erreur save CU:', e);
+      toast(`Erreur : ${e.message}`, 'danger');
     }
-    saveDB();
-    closeModal();
-    _refresh(container);
   });
 }
 

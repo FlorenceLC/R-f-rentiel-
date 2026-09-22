@@ -267,9 +267,9 @@ export function renderAdminParamsIA(container) {
 
       <div class="form-group">
         <label class="form-label">Modèle</label>
-        <input class="form-control" id="ia-model" value="${model}" list="model-suggestions" placeholder="gpt-4 ou gemini-2.5-flash-lite">
+        <input class="form-control" id="ia-model" value="${model}" list="model-suggestions" placeholder="gpt-4 ou gemini-3.5-flash-lite">
         <datalist id="model-suggestions">
-          <option value="gemini-2.5-flash-lite">
+          <option value="gemini-3.5-flash-lite">
           <option value="gpt-4">
           <option value="gpt-4o">
           <option value="gpt-3.5-turbo">
@@ -301,10 +301,10 @@ export function renderAdminParamsIA(container) {
     const gem = e.target.value === 'gemini';
     container.querySelector('#ia-openai-fields').style.display = gem ? 'none' : '';
     container.querySelector('#ia-gemini-fields').style.display = gem ? '' : 'none';
-    container.querySelector('#ia-model').placeholder = gem ? 'gemini-2.5-flash-lite' : 'gpt-4';
+    container.querySelector('#ia-model').placeholder = gem ? 'gemini-3.5-flash-lite' : 'gpt-4';
     container.querySelector('#ia-key').placeholder = gem ? 'AIza…' : 'sk-…';
     if (gem && !container.querySelector('#ia-model').value.startsWith('gemini')) {
-      container.querySelector('#ia-model').value = 'gemini-2.5-flash-lite';
+      container.querySelector('#ia-model').value = 'gemini-3.5-flash-lite';
     }
   });
 
