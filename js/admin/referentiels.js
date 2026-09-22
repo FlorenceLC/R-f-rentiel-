@@ -438,6 +438,50 @@ export function renderAdminParams(container) {
       <button class="btn btn-primary" id="p-save">💾 Enregistrer les paramètres</button>
       <button class="btn btn-danger" id="p-reset" style="margin-left:auto">🗑️ Réinitialiser la base de données</button>
     </div>
+
+    <!-- Export / Import CU entre pays -->
+    <div style="max-width:1000px;margin-bottom:32px;">
+      <div class="card">
+        <div class="section-title mb-2">🔄 Export / Import de cas d'usage (entre pays)</div>
+        <div class="alert alert-info" style="font-size:12px;margin-bottom:14px;">
+          Transfère uniquement les CU marqués <strong>Commun FR+DE</strong>.<br>
+          Les CU <em>Spécial France</em> et <em>Spécial Allemagne</em> sont <strong>exclus</strong>.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+          <div>
+            <div style="font-weight:600;margin-bottom:10px;">⬇️ Exporter vers un fichier JSON</div>
+            <div class="form-group">
+              <label class="form-label">Filtrer par pays source</label>
+              <select class="form-control" id="exp-country">
+                <option value="">🌍 Tous les CU communs</option>
+                <option value="FR">🇫🇷 CU communs — origine France</option>
+                <option value="DE">🇩🇪 CU communs — origine Allemagne</option>
+              </select>
+              <div class="form-hint">Le fichier JSON peut ensuite être importé sur l'instance de l'autre pays.</div>
+            </div>
+            <button class="btn btn-primary" id="p-export">⬇️ Exporter les CU communs</button>
+            <div id="exp-status" class="text-sm mt-1" style="color:var(--green)"></div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:10px;">⬆️ Importer depuis un fichier JSON</div>
+            <div class="form-group">
+              <label class="form-label">Fichier exporté (.json)</label>
+              <input type="file" class="form-control" id="imp-file" accept=".json">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pays cible (pour adapter les IDs)</label>
+              <select class="form-control" id="imp-country">
+                <option value="">Conserver les IDs d'origine</option>
+                <option value="FR">🇫🇷 France (suffixe -FR)</option>
+                <option value="DE">🇩🇪 Allemagne (suffixe -DE)</option>
+              </select>
+            </div>
+            <button class="btn btn-outline" id="p-import">⬆️ Importer</button>
+            <div id="imp-status" class="text-sm mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -519,6 +563,45 @@ export function renderAdminParams(container) {
     await resetDB();
     toast('Base de données réinitialisée.', 'success');
     location.reload();
+  });
+
+  // ── Export CU ─────────────────────────────────────────────────────────────
+  container.querySelector('#p-export').addEventListener('click', async () => {
+    const { exportCU } = await import('../modules/export.js');
+    const country = container.querySelector('#exp-country').value || null;
+    const result  = exportCU(country);
+    const statusEl = container.querySelector('#exp-status');
+    if (result.ok) {
+      statusEl.textContent = `✅ ${result.count} CU exportés — fichier téléchargé.`;
+      statusEl.style.color = 'var(--green)';
+    } else {
+      statusEl.textContent = `❌ ${result.msg}`;
+      statusEl.style.color = 'var(--red)';
+    }
+  });
+
+  // ── Import CU ─────────────────────────────────────────────────────────────
+  container.querySelector('#p-import').addEventListener('click', async () => {
+    const fileInput  = container.querySelector('#imp-file');
+    const targetCountry = container.querySelector('#imp-country').value || null;
+    const statusEl   = container.querySelector('#imp-status');
+    if (!fileInput.files.length) {
+      statusEl.textContent = '❌ Veuillez sélectionner un fichier JSON.';
+      statusEl.style.color = 'var(--red)';
+      return;
+    }
+    statusEl.textContent = '⏳ Import en cours…';
+    statusEl.style.color = 'var(--text-muted)';
+    const { importCU } = await import('../modules/export.js');
+    const r = await importCU(fileInput.files[0], targetCountry);
+    if (r.ok) {
+      statusEl.innerHTML = `✅ Import terminé — <strong>${r.inserted} insérés</strong>, ${r.skipped} ignorés (déjà présents), ${r.errors} erreurs sur ${r.total} CU.`;
+      statusEl.style.color = 'var(--green)';
+      toast(`${r.inserted} CU importés avec succès.`, 'success');
+    } else {
+      statusEl.textContent = `❌ ${r.msg}`;
+      statusEl.style.color = 'var(--red)';
+    }
   });
 }
 
