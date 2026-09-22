@@ -34,6 +34,7 @@ export async function initDB() {
     console.log('[DB] fresh database');
     _createSchema();
     _seedData();
+    _migrate(); // ensure all settings and columns exist on fresh DB too
     await _idbSave();
   }
 
@@ -56,30 +57,57 @@ async function initSQL() {
 
 /** Add new columns to existing DBs without losing data */
 function _migrate() {
-  const addCol = (table, col, def) => {
-    try { _db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); } catch {}
-  };
-  // New columns for multi-country support
-  addCol('users',     'pays TEXT DEFAULT NULL');            // FR | DE | null
-  addCol('use_cases', 'origine TEXT DEFAULT NULL');         // FR | DE | null
-  addCol('use_cases', 'visibilite TEXT DEFAULT "common"');  // common | FR | DE
-  addCol('requests',  'entite TEXT DEFAULT NULL');          // KNDS FR | KNDS DE
-
-  // New settings
-  const newSettings = [
-    ['app_lang',          'fr',    'Langue de l\'interface (fr/en/de)', 'string'],
-    ['bilingual_mode',    'false', 'Mode bilingue FR/DE activé',        'boolean'],
-    ['special_tab_fr',    'Spécial France',     'Libellé onglet spécial France',     'string'],
-    ['special_tab_de',    'Spécial Allemagne',  'Libellé onglet spécial Allemagne',  'string'],
-    ['gist_id',           '',      'ID du Gist GitHub',     'string'],
-    ['gist_token',        '',      'Token GitHub PAT',      'string'],
-    ['show_roi_public',   'false', 'Afficher les ROI aux visiteurs', 'boolean'],
-  ];
-  newSettings.forEach(([k,v,d,t]) => {
+  /** Check if a column already exists via PRAGMA */
+  const hasCol = (table, col) => {
     try {
-      _db.run(`INSERT OR IGNORE INTO settings(cle,valeur,description,type_valeur) VALUES(?,?,?,?)`, [k,v,d,t]);
-    } catch {}
+      const res = _db.exec(`PRAGMA table_info(${table})`);
+      if (!res.length || !res[0].values) return false;
+      return res[0].values.some(r => r[1] === col);
+    } catch { return false; }
+  };
+
+  /** Only ALTER TABLE when the column is truly missing */
+  const addCol = (table, col, def) => {
+    if (hasCol(table, col)) return; // already there — skip
+    try {
+      _db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+      console.log(`[DB migrate] Added column ${table}.${col}`);
+    } catch(e) {
+      console.error(`[DB migrate] Could not add ${table}.${col}:`, e.message);
+    }
+  };
+
+  // Multi-country columns
+  addCol('users',     'pays',       'TEXT DEFAULT NULL');
+  addCol('use_cases', 'origine',    'TEXT DEFAULT NULL');
+  addCol('use_cases', 'visibilite', "TEXT DEFAULT 'common'");
+  addCol('requests',  'entite',     'TEXT DEFAULT NULL');
+
+  // New settings (INSERT OR IGNORE is safe to repeat)
+  const newSettings = [
+    ['app_lang',            'fr',                   'Langue de l\'interface (fr/en/de)', 'string'],
+    ['bilingual_mode',      'false',                'Mode bilingue FR/DE activé',         'boolean'],
+    ['special_tab_fr',      'Spécial France',       'Libellé onglet spécial France',      'string'],
+    ['special_tab_de',      'Spécial Allemagne',    'Libellé onglet spécial Allemagne',   'string'],
+    ['gist_id',             '',                     'ID du Gist GitHub',                  'string'],
+    ['gist_token',          '',                     'Token GitHub PAT',                   'string'],
+    ['show_roi_public',     'false',                'Afficher les ROI aux visiteurs',     'boolean'],
+    ['app_contact_cc',      '',                     'CC email contact',                   'string'],
+    ['app_contact_subject', 'Demande d\'information', 'Objet email contact',             'string'],
+    ['app_contact_body',    '',                     'Corps email contact',                'string'],
+    ['ai_gravitee_key',     '',                     'Clé Gravitee API Gateway',           'string'],
+  ];
+  newSettings.forEach(([k, v, d, t]) => {
+    try {
+      _db.run(
+        `INSERT OR IGNORE INTO settings(cle,valeur,description,type_valeur) VALUES(?,?,?,?)`,
+        [k, v, d, t]
+      );
+    } catch(e) { console.warn(`[DB migrate] setting ${k}:`, e.message); }
   });
+
+  // Persist migration immediately
+  _idbSave().catch(e => console.error('[DB migrate] _idbSave failed:', e));
 }
 
 /** Run schema and seed if new DB */

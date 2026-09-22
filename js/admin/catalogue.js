@@ -89,8 +89,8 @@ function _buildTable(rows) {
           <td>${chip(cu.technologie,'tech')}</td>
           <td class="text-sm text-muted">${cu.responsable||'—'}</td>
           <td class="text-sm" style="color:var(--green)">${cu.roi_annuel?formatROI(cu.roi_annuel):'—'}</td>
-          <td class="text-sm">${cu.origine==='FR'?'🇫🇷 FR':cu.origine==='DE'?'🇩🇪 DE':'—'}</td>
-          <td class="text-sm">${cu.visibilite==='FR'?'🇫🇷 Spécial FR':cu.visibilite==='DE'?'🇩🇪 Spécial DE':cu.visibilite==='common'?'🌍 Commun':'—'}</td>
+          <td class="text-sm">${(cu.origine==='FR')?'🇫🇷 FR':(cu.origine==='DE')?'🇩🇪 DE':'—'}</td>
+          <td class="text-sm">${(cu.visibilite==='FR')?'🇫🇷 Spécial FR':(cu.visibilite==='DE')?'🇩🇪 Spécial DE':'🌍 Commun'}</td>
           <td>${cu.application_disponible?'🟢':'⭕'}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-outline btn-sm" onclick="window._editCu('${cu.cu_id}')">✏️</button>

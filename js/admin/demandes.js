@@ -103,7 +103,7 @@ function _buildTable(rows) {
             <td class="cu-id">${r.dem_id}</td>
             <td class="text-sm"><strong>${r.prenom} ${r.nom}</strong><br><span class="text-muted">${r.email}</span></td>
             <td class="text-sm text-muted">${truncate(r.direction,20)}</td>
-            <td class="text-sm">${r.entite==='FR'?'🇫🇷 FR':r.entite==='DE'?'🇩🇪 DE':'—'}</td>
+            <td class="text-sm">${(r.entite==='FR')?'🇫🇷 FR':(r.entite==='DE')?'🇩🇪 DE':'—'}</td>
             <td class="text-sm">${truncate(r.objectif,50)}</td>
             <td>${statusBadge(r.statut)}</td>
             <td>${r.type_besoin_ia ? chip(r.type_besoin_ia,'type') : '<span class="text-muted text-sm">—</span>'}</td>
@@ -140,7 +140,7 @@ window._openDemande = (demId) => {
       <div class="detail-item"><div class="di-label">Demandeur</div><div class="di-value">${r.prenom} ${r.nom}</div></div>
       <div class="detail-item"><div class="di-label">Email</div><div class="di-value">${r.email}</div></div>
       <div class="detail-item"><div class="di-label">Direction</div><div class="di-value">${r.direction}</div></div>
-      ${r.entite ? `<div class="detail-item"><div class="di-label">Entité</div><div class="di-value">${r.entite==='FR'?'🇫🇷 KNDS France':r.entite==='DE'?'🇩🇪 KNDS Allemagne':r.entite}</div></div>` : ''}
+      ${(r.entite != null && r.entite !== '') ? `<div class="detail-item"><div class="di-label">Entité</div><div class="di-value">${r.entite==='FR'?'🇫🇷 KNDS France':r.entite==='DE'?'🇩🇪 KNDS Allemagne':r.entite}</div></div>` : ''}
       <div class="detail-item"><div class="di-label">Date</div><div class="di-value">${formatDate(r.date_demande)}</div></div>
     </div>
 
