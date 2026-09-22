@@ -128,6 +128,7 @@ const TRANSLATIONS = {
     'common.by': 'par',
     'common.from': 'de',
     'common.all': 'Tous',
+    'common.back': 'Retour',
 
     // Params
     'params.title': 'Paramètres généraux',
@@ -268,6 +269,7 @@ const TRANSLATIONS = {
     'common.by': 'by',
     'common.from': 'from',
     'common.all': 'All',
+    'common.back': 'Back',
 
     'params.title': 'General settings',
     'params.app': '🏢 Application',
@@ -407,6 +409,7 @@ const TRANSLATIONS = {
     'common.by': 'von',
     'common.from': 'von',
     'common.all': 'Alle',
+    'common.back': 'Zurück',
 
     'params.title': 'Allgemeine Einstellungen',
     'params.app': '🏢 Anwendung',
