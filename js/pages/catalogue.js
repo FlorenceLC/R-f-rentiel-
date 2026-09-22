@@ -30,46 +30,45 @@ function _renderList(container) {
 
   container.innerHTML = `
     <div class="hero" style="padding:20px 24px;">
-      <h1>📚 Catalogue des cas d'usage</h1>
-      <p>Explorez les projets de notre département et découvrez les solutions mises en place.</p>
+      <h1>📚 ${t('catalogue.title')}</h1>
     </div>
 
     <div class="card mb-2">
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div style="position:relative;">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray)">🔍</span>
-          <input type="text" class="form-control" id="cat-search" placeholder="ID, nom, description, responsable…" value="${_state.search}" style="padding-left:32px;">
+          <input type="text" class="form-control" id="cat-search" placeholder="${t('catalogue.search')}" value="${_state.search}" style="padding-left:32px;">
         </div>
         <select class="form-control" id="cat-type">
-          <option value="">Tous les types</option>
-          ${needTypes.map(t=>`<option ${t===_state.type?'selected':''}>${t}</option>`).join('')}
+          <option value="">${t('common.all')}</option>
+          ${needTypes.map(v=>`<option ${v===_state.type?'selected':''}>${v}</option>`).join('')}
         </select>
         <select class="form-control" id="cat-tech">
-          <option value="">Toutes technos</option>
-          ${techs.map(t=>`<option ${t===_state.tech?'selected':''}>${t}</option>`).join('')}
+          <option value="">${t('common.all')}</option>
+          ${techs.map(v=>`<option ${v===_state.tech?'selected':''}>${v}</option>`).join('')}
         </select>
         <select class="form-control" id="cat-sujet">
-          <option value="">Tous sujets</option>
-          ${sujets.map(t=>`<option ${t===_state.sujet?'selected':''}>${t}</option>`).join('')}
+          <option value="">${t('common.all')}</option>
+          ${sujets.map(v=>`<option ${v===_state.sujet?'selected':''}>${v}</option>`).join('')}
         </select>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         <select class="form-control" id="cat-resp" style="max-width:200px;">
-          <option value="">Tous responsables</option>
+          <option value="">${t('common.all')}</option>
           ${resps.map(r=>`<option ${r===_state.resp?'selected':''}>${r}</option>`).join('')}
         </select>
-        <button class="btn btn-ghost btn-sm" id="cat-reset">↺ Réinitialiser</button>
+        <button class="btn btn-ghost btn-sm" id="cat-reset">↺ ${t('common.filter')}</button>
       </div>
     </div>
 
     <div class="tabs" id="cat-tabs">
       ${['all','backlog','en_cours','production'].map(k => `
         <button class="tab-btn ${k===_state.tab?'active':''}" data-tab="${k}">
-          ${k==='all'?'📋 Tous':k==='backlog'?'📝 Backlog':k==='en_cours'?'⚙️ En cours':'🚀 Disponibles'}
+          ${k==='all'?`📋 ${t('common.all')}`:k==='backlog'?`📝 Backlog`:k==='en_cours'?`⚙️ ${t('home.kpi.poc')}…`:`🚀 ${t('home.kpi.production')}`}
         </button>`).join('')}
     </div>
 
-    <div class="text-muted text-sm mb-2">${total} cas d'usage</div>
+    <div class="text-muted text-sm mb-2">${total} ${t('home.kpi.total').toLowerCase()}</div>
 
     <div id="cat-results">
       ${_cuTable(rows)}
@@ -150,12 +149,12 @@ function _fetchRows() {
 }
 
 function _cuTable(rows) {
-  if (!rows.length) return emptyState('🔍', 'Aucun cas d\'usage', 'Modifiez vos filtres ou recherche.');
+  if (!rows.length) return emptyState('🔍', t('catalogue.empty'), t('common.filter'));
   const admin = isAdmin();
   return `<div class="table-wrap">
     <table class="data-table">
       <thead><tr>
-        <th>ID</th><th>Nom</th><th>Statut</th><th>Type</th><th>Technologie</th><th>Responsable</th>${admin ? '<th>ROI/an</th>' : ''}<th>Origine</th><th>Date</th>
+        <th>${t('catalogue.col.id')}</th><th>${t('catalogue.col.name')}</th><th>${t('catalogue.col.status')}</th><th>${t('catalogue.col.type')}</th><th>${t('catalogue.col.tech')}</th><th>${t('catalogue.col.resp')}</th>${admin ? `<th>${t('catalogue.col.roi')}</th>` : ''}<th>${t('catalogue.col.origin')}</th><th>${t('catalogue.col.date')}</th>
       </tr></thead>
       <tbody>
         ${rows.map(cu => `<tr style="cursor:pointer" onclick="navigate('catalogue',{cu_id:'${cu.cu_id}'})">
@@ -178,7 +177,7 @@ function _renderDetail(container, cuId) {
   const cu = queryOne(`SELECT * FROM use_cases WHERE cu_id=? AND actif=1`, [cuId]);
   if (!cu) {
     container.innerHTML = `<div class="alert alert-danger">Cas d'usage "${cuId}" introuvable.</div>
-      <button class="btn btn-outline mt-2" onclick="navigate('catalogue')">← Retour</button>`;
+      <button class="btn btn-outline mt-2" onclick="navigate('catalogue')">← ${t('nav.catalogue')}</button>`;
     return;
   }
 
@@ -191,7 +190,7 @@ function _renderDetail(container, cuId) {
     </div>` : '';
 
   container.innerHTML = `
-    <button class="btn btn-ghost mb-2" onclick="navigate('catalogue')">← Retour au catalogue</button>
+    <button class="btn btn-ghost mb-2" onclick="navigate('catalogue')">← ${t('common.back')||t('nav.catalogue')}</button>
 
     <div class="card">
       <div class="cu-detail-header">
@@ -210,20 +209,20 @@ function _renderDetail(container, cuId) {
       ${appSection}
 
       <div class="detail-grid mt-2">
-        <div class="detail-item"><div class="di-label">Type de besoin</div><div class="di-value">${chip(cu.type_besoin,'type')}</div></div>
-        <div class="detail-item"><div class="di-label">Technologie</div><div class="di-value">${chip(cu.technologie,'tech')}</div></div>
+        <div class="detail-item"><div class="di-label">${t('cu.type')}</div><div class="di-value">${chip(cu.type_besoin,'type')}</div></div>
+        <div class="detail-item"><div class="di-label">${t('cu.tech')}</div><div class="di-value">${chip(cu.technologie,'tech')}</div></div>
         <div class="detail-item"><div class="di-label">Type de sujet</div><div class="di-value">${chip(cu.type_sujet,'sujet')}</div></div>
-        <div class="detail-item"><div class="di-label">Responsable</div><div class="di-value">${cu.responsable||'—'}</div></div>
-        <div class="detail-item"><div class="di-label">Pilote métier</div><div class="di-value">${cu.pilote_metier||'—'}</div></div>
-        <div class="detail-item"><div class="di-label">Date de création</div><div class="di-value">${formatDate(cu.date_creation)}</div></div>
-        ${cu.origine ? `<div class="detail-item"><div class="di-label">Origine</div><div class="di-value">${originLabel(cu.origine)}</div></div>` : ''}
-        ${cu.visibilite && cu.visibilite !== 'common' ? `<div class="detail-item"><div class="di-label">Visibilité</div><div class="di-value">${visibilityLabel(cu.visibilite)}</div></div>` : ''}
+        <div class="detail-item"><div class="di-label">${t('cu.resp')}</div><div class="di-value">${cu.responsable||'—'}</div></div>
+        <div class="detail-item"><div class="di-label">${t('cu.pilot')}</div><div class="di-value">${cu.pilote_metier||'—'}</div></div>
+        <div class="detail-item"><div class="di-label">${t('cu.created')}</div><div class="di-value">${formatDate(cu.date_creation)}</div></div>
+        ${cu.origine ? `<div class="detail-item"><div class="di-label">${t('cu.origin')}</div><div class="di-value">${originLabel(cu.origine)}</div></div>` : ''}
+        ${cu.visibilite && cu.visibilite !== 'common' ? `<div class="detail-item"><div class="di-label">${t('cu.visibility')}</div><div class="di-value">${visibilityLabel(cu.visibilite)}</div></div>` : ''}
       </div>
 
       ${admin && (cu.roi_annuel || cu.gain_estime) ? `
         <div class="roi-display mt-2">
           <div class="roi-value">${cu.roi_annuel ? formatROI(cu.roi_annuel) + '/an' : '—'}</div>
-          <div class="roi-label">ROI annuel estimé</div>
+          <div class="roi-label">${t('cu.roi')}</div>
           ${cu.gain_estime ? `<div class="text-sm mt-1">${cu.gain_estime}</div>` : ''}
         </div>` : ''}
 
