@@ -3,7 +3,7 @@
  */
 import { initDB, getSetting, query, queryOne } from './modules/db.js';
 import { isLoggedIn, isAdmin, isVisitor, getCurrentUser, getCurrentUsername, getUserPays, logout, loginVisitor, loginAdmin } from './modules/auth.js';
-import { el, setHTML, toast } from './modules/ui.js';
+import { el, setHTML, toast, closeModal } from './modules/ui.js';
 import { setLang, getLang, t } from './modules/i18n.js';
 
 // ── Page imports ──────────────────────────────────────────
@@ -287,6 +287,7 @@ export async function boot() {
 }
 
 // Expose navigate globally for inline onclick handlers
-window.navigate = navigate;
+window.navigate     = navigate;
 window.getPageParams = getPageParams;
-window.setPageParam = setPageParam;
+window.setPageParam  = setPageParam;
+window.closeModal    = closeModal;
