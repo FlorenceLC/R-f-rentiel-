@@ -212,42 +212,74 @@ export function renderAdminParamsIA(container) {
   const model       = getSetting('ai_model','gpt-4');
   const graviteeKey = getSetting('ai_gravitee_key','');
 
+  // Detect current provider from model
+  const isGemini = model.toLowerCase().startsWith('gemini');
+
   container.innerHTML = `
     <div class="hero" style="padding:18px 24px;">
       <h1>🤖 Paramètres IA</h1>
-      <p>Configurez l'accès à l'API IA compatible OpenAI. Ces données sont stockées localement dans votre navigateur.</p>
+      <p>Configurez l'accès à l'API IA. Ces données sont stockées localement dans votre navigateur.</p>
     </div>
 
-    <div class="card" style="max-width:600px;">
-      <div class="alert alert-info mb-2">🔒 Les informations saisies ici sont stockées <strong>uniquement dans votre navigateur</strong> (IndexedDB local). Elles ne sont jamais envoyées à un serveur externe autre que l'API IA que vous configurez.</div>
+    <div class="card" style="max-width:640px;">
+      <div class="alert alert-info mb-2">🔒 Les informations saisies ici sont stockées <strong>uniquement dans votre navigateur</strong> (IndexedDB local).</div>
 
       <div class="form-group">
-        <label class="form-label">URL de l'API <span class="required">*</span></label>
-        <input class="form-control" id="ia-url" value="${baseUrl}" placeholder="https://api.openai.com">
-        <div class="form-hint">URL de base de l'API (compatible OpenAI). Exemple : https://api.openai.com</div>
+        <label class="form-label">Fournisseur IA</label>
+        <select class="form-control" id="ia-provider">
+          <option value="openai" ${!isGemini?'selected':''}>🏢 API interne / OpenAI-compatible (Gravitee…)</option>
+          <option value="gemini" ${isGemini?'selected':''}>✨ Google Gemini</option>
+        </select>
       </div>
+
+      <!-- Bloc OpenAI-compatible -->
+      <div id="ia-openai-fields" style="${isGemini?'display:none':''}">
+        <div class="form-group">
+          <label class="form-label">URL de l'API <span class="required">*</span></label>
+          <input class="form-control" id="ia-url" value="${baseUrl}" placeholder="https://apimanager.exemple.intra/…">
+          <div class="form-hint">URL de base (sans /v1/chat/completions). Exemple : https://api.openai.com</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Clé Gravitee API Gateway <span class="text-muted">(optionnel)</span></label>
+          <div style="position:relative">
+            <input class="form-control" type="password" id="ia-gravitee" value="${graviteeKey}" placeholder="Laissez vide si non utilisé" style="padding-right:80px">
+            <button class="btn btn-ghost btn-sm" onclick="window._togglePwdVis('ia-gravitee',this)" style="position:absolute;right:4px;top:4px;">👁 Afficher</button>
+          </div>
+          <div class="form-hint">Ajouté comme en-tête <code>X-Gravitee-Api-Key</code> si renseigné.</div>
+        </div>
+      </div>
+
+      <!-- Bloc Gemini -->
+      <div id="ia-gemini-fields" style="${isGemini?'':'display:none'}">
+        <div class="alert alert-info" style="font-size:12px;margin-bottom:12px;">
+          ✨ Gemini utilise directement <code>generativelanguage.googleapis.com</code> — aucune URL de base n'est nécessaire.<br>
+          Obtenez votre clé sur <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>.
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Clé API <span class="required">*</span></label>
         <div style="position:relative">
-          <input class="form-control" type="password" id="ia-key" value="${apiKey}" placeholder="sk-…" style="padding-right:80px">
+          <input class="form-control" type="password" id="ia-key" value="${apiKey}" placeholder="${isGemini?'AIza…':'sk-…'}" style="padding-right:80px">
           <button class="btn btn-ghost btn-sm" onclick="window._togglePwdVis('ia-key',this)" style="position:absolute;right:4px;top:4px;">👁 Afficher</button>
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Clé Gravitee API Gateway <span class="text-muted">(optionnel)</span></label>
-        <div style="position:relative">
-          <input class="form-control" type="password" id="ia-gravitee" value="${graviteeKey}" placeholder="Laissez vide si non utilisé" style="padding-right:80px">
-          <button class="btn btn-ghost btn-sm" onclick="window._togglePwdVis('ia-gravitee',this)" style="position:absolute;right:4px;top:4px;">👁 Afficher</button>
-        </div>
-        <div class="form-hint">Ajouté comme en-tête <code>X-Gravitee-Api-Key</code> si renseigné.</div>
-      </div>
+
       <div class="form-group">
         <label class="form-label">Modèle</label>
-        <input class="form-control" id="ia-model" value="${model}" list="model-suggestions" placeholder="gpt-4">
+        <input class="form-control" id="ia-model" value="${model}" list="model-suggestions" placeholder="gpt-4 ou gemini-2.5-flash-lite">
         <datalist id="model-suggestions">
-          <option value="gpt-4"><option value="gpt-4o"><option value="gpt-3.5-turbo">
-          <option value="claude-sonnet-4-6"><option value="claude-opus-5"><option value="mistral-7b-instruct">
+          <option value="gemini-2.5-flash-lite">
+          <option value="gpt-4">
+          <option value="gpt-4o">
+          <option value="gpt-3.5-turbo">
+          <option value="mistral-7b-instruct">
         </datalist>
+        <div class="form-hint" id="ia-model-hint">
+          ${isGemini
+            ? '✨ Modèle Gemini — utilise l\'API Google Generative Language.'
+            : '🏢 Modèle OpenAI-compatible — utilise l\'URL configurée ci-dessus.'}
+        </div>
       </div>
 
       <div class="flex gap-1 mt-2">
@@ -263,6 +295,28 @@ export function renderAdminParamsIA(container) {
     input.type = input.type === 'password' ? 'text' : 'password';
     btn.textContent = input.type === 'password' ? '👁 Afficher' : '🙈 Masquer';
   };
+
+  // Toggle fields based on provider
+  container.querySelector('#ia-provider').addEventListener('change', e => {
+    const gem = e.target.value === 'gemini';
+    container.querySelector('#ia-openai-fields').style.display = gem ? 'none' : '';
+    container.querySelector('#ia-gemini-fields').style.display = gem ? '' : 'none';
+    container.querySelector('#ia-model').placeholder = gem ? 'gemini-2.5-flash-lite' : 'gpt-4';
+    container.querySelector('#ia-key').placeholder = gem ? 'AIza…' : 'sk-…';
+    if (gem && !container.querySelector('#ia-model').value.startsWith('gemini')) {
+      container.querySelector('#ia-model').value = 'gemini-2.5-flash-lite';
+    }
+  });
+
+  // Update hint when model changes
+  container.querySelector('#ia-model').addEventListener('input', e => {
+    const gem = e.target.value.toLowerCase().startsWith('gemini');
+    container.querySelector('#ia-model-hint').textContent = gem
+      ? '✨ Modèle Gemini — utilise l\'API Google Generative Language.'
+      : '🏢 Modèle OpenAI-compatible — utilise l\'URL configurée ci-dessus.';
+    container.querySelector('#ia-openai-fields').style.display = gem ? 'none' : '';
+    container.querySelector('#ia-gemini-fields').style.display = gem ? '' : 'none';
+  });
 
   container.querySelector('#ia-save').addEventListener('click', async () => {
     const url = container.querySelector('#ia-url').value.trim();
