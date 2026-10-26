@@ -111,16 +111,27 @@ window._archiveCu = cuId => {
   if (!confirm(`Archiver ${cuId} ?`)) return;
   run(`UPDATE use_cases SET actif=0, statut='Abandonné', date_modification=datetime('now') WHERE cu_id=?`, [cuId]);
   run(`INSERT INTO archives(type_archive,reference_id,reference_code,nom,archive_par) SELECT 'USE_CASE',id,cu_id,nom,? FROM use_cases WHERE cu_id=?`,
-    [getCurrentUsername?.() || 'admin', cuId]);
+    [_getCurrentUsername(), cuId]);
   saveDB();
   toast(`${cuId} archivé.`, 'warning');
   const cont = document.querySelector('#main-content');
   if (cont) _refresh(cont);
 };
 
+const TYPES_DONNEES_OPTIONS = [
+  'PDF','Tableurs','Bases de données','Images',
+  'Audio ou documents numérisés','Document Office','Code informatique','Systèmes'
+];
+
 function _openEditModal(cuId, container) {
   const cu = cuId ? queryOne(`SELECT * FROM use_cases WHERE cu_id=?`, [cuId]) : null;
   const isNew = !cu;
+
+  // Parse extras from commentaire
+  let extras = {};
+  if (cu?.commentaire) {
+    try { extras = JSON.parse(cu.commentaire); } catch {}
+  }
 
   const needTypes = query(`SELECT libelle FROM need_types WHERE actif=1 ORDER BY ordre`).map(r=>r.libelle);
   const techs     = query(`SELECT libelle FROM technologies WHERE actif=1 ORDER BY ordre`).map(r=>r.libelle);
@@ -129,7 +140,28 @@ function _openEditModal(cuId, container) {
   const resps     = query(`SELECT DISTINCT responsable FROM use_cases WHERE actif=1 AND responsable IS NOT NULL ORDER BY responsable`).map(r=>r.responsable);
 
   const opt = (arr, val='') => arr.map(v=>`<option value="${v}" ${v==val?'selected':''}>${v}</option>`).join('');
-  const v = (field, def='') => cu ? (cu[field] ?? def) : def;
+  const v   = (field, def='') => cu ? (cu[field] ?? def) : def;
+  const ex  = (field, def='') => extras[field] ?? def;
+
+  // Build types_donnees checkboxes
+  const selectedTypes = ex('types_donnees') ? (Array.isArray(ex('types_donnees')) ? ex('types_donnees') : []) : [];
+  const typesDonneesHTML = TYPES_DONNEES_OPTIONS.map(td =>
+    `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;font-size:13px;">
+       <input type="checkbox" class="cb-ex-type-donnee" value="${td}" ${selectedTypes.includes(td)?'checked':''}> ${td}
+     </label>`
+  ).join('');
+
+  const showSystemes = selectedTypes.includes('Systèmes');
+  const selectedSystemes = Array.isArray(ex('systemes_selectionnes')) ? ex('systemes_selectionnes') : [];
+  const systemesOpts = ['SAP','Oracle ERP','Salesforce','Microsoft Dynamics','ServiceNow','SharePoint',
+    'Microsoft Teams','Jira / Confluence','GitHub / GitLab','Power BI','Tableau','Dataiku',
+    'Azure / AWS / GCP','API REST interne','Autre système']
+    .map(s=>`<option value="${s}" ${selectedSystemes.includes(s)?'selected':''}>${s}</option>`).join('');
+
+  const priorite = ex('priorite') || '';
+  const showJustif = priorite && priorite !== 'Faible';
+  const benefice = ex('benefice_attendu') || '';
+  const showAutreBen = benefice === 'Autre';
 
   openModal(`
     <div class="modal-header">
@@ -137,56 +169,196 @@ function _openEditModal(cuId, container) {
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
 
-    <div class="form-grid form-grid-2">
-      <div class="form-group"><label class="form-label">Nom <span class="required">*</span></label>
-        <input class="form-control" id="cu-nom" value="${v('nom')}" required></div>
-      <div class="form-group"><label class="form-label">Statut</label>
-        <select class="form-control" id="cu-statut">${opt(statuts, v('statut','Besoin identifié'))}</select></div>
-      <div class="form-group"><label class="form-label">Type de besoin</label>
-        <select class="form-control" id="cu-type"><option value=""></option>${opt(needTypes, v('type_besoin'))}</select></div>
-      <div class="form-group"><label class="form-label">Technologie</label>
-        <select class="form-control" id="cu-tech"><option value=""></option>${opt(techs, v('technologie'))}</select></div>
-      <div class="form-group"><label class="form-label">Type de sujet</label>
-        <select class="form-control" id="cu-sujet"><option value=""></option>${opt(sujets, v('type_sujet'))}</select></div>
-      <div class="form-group"><label class="form-label">Responsable</label>
-        <input class="form-control" id="cu-resp" list="resp-list" value="${v('responsable')}">
-        <datalist id="resp-list">${resps.map(r=>`<option value="${r}">`).join('')}</datalist></div>
-      <div class="form-group"><label class="form-label">Pilote métier</label>
-        <input class="form-control" id="cu-pilote" value="${v('pilote_metier')}"></div>
-      <div class="form-group"><label class="form-label">ROI annuel (€)</label>
-        <input class="form-control" type="number" id="cu-roi" value="${v('roi_annuel')}"></div>
-      <div class="form-group"><label class="form-label">Origine</label>
-        <select class="form-control" id="cu-origine">
-          <option value="" ${!v('origine')?'selected':''}>— Non défini —</option>
-          <option value="FR" ${v('origine')==='FR'?'selected':''}>🇫🇷 KNDS France</option>
-          <option value="DE" ${v('origine')==='DE'?'selected':''}>🇩🇪 KNDS Allemagne</option>
-        </select></div>
-      <div class="form-group"><label class="form-label">Visibilité</label>
-        <select class="form-control" id="cu-visibilite">
-          <option value="common" ${(v('visibilite')||'common')==='common'?'selected':''}>🌍 Commun FR+DE (catalogue uniquement)</option>
-          <option value="FR" ${v('visibilite')==='FR'?'selected':''}>🇫🇷 Spécial France</option>
-          <option value="DE" ${v('visibilite')==='DE'?'selected':''}>🇩🇪 Spécial Allemagne</option>
-        </select>
-        <div class="form-hint">Spécial FR/DE : visible dans l'onglet dédié. Commun : visible dans le catalogue uniquement.</div>
+    <!-- ══ ONGLETS ══ -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0;">
+      <button class="cu-tab-btn active" data-tab="general" style="padding:6px 14px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-2px;">📋 Général</button>
+      <button class="cu-tab-btn" data-tab="besoin" style="padding:6px 14px;border:none;background:none;cursor:pointer;color:var(--text-muted);">📝 Besoin</button>
+      <button class="cu-tab-btn" data-tab="donnees" style="padding:6px 14px;border:none;background:none;cursor:pointer;color:var(--text-muted);">📂 Données</button>
+      <button class="cu-tab-btn" data-tab="roi" style="padding:6px 14px;border:none;background:none;cursor:pointer;color:var(--text-muted);">💰 ROI</button>
+    </div>
+
+    <!-- ══ ONGLET GÉNÉRAL ══ -->
+    <div id="cu-tab-general">
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label class="form-label">Nom <span class="required">*</span></label>
+          <input class="form-control" id="cu-nom" value="${v('nom')}" required></div>
+        <div class="form-group"><label class="form-label">Statut</label>
+          <select class="form-control" id="cu-statut">${opt(statuts, v('statut','Besoin identifié'))}</select></div>
+        <div class="form-group"><label class="form-label">Type de besoin</label>
+          <select class="form-control" id="cu-type"><option value=""></option>${opt(needTypes, v('type_besoin'))}</select></div>
+        <div class="form-group"><label class="form-label">Technologie</label>
+          <select class="form-control" id="cu-tech"><option value=""></option>${opt(techs, v('technologie'))}</select></div>
+        <div class="form-group"><label class="form-label">Type de sujet</label>
+          <select class="form-control" id="cu-sujet"><option value=""></option>${opt(sujets, v('type_sujet'))}</select></div>
+        <div class="form-group"><label class="form-label">Responsable</label>
+          <input class="form-control" id="cu-resp" list="resp-list" value="${v('responsable')}">
+          <datalist id="resp-list">${resps.map(r=>`<option value="${r}">`).join('')}</datalist></div>
+        <div class="form-group"><label class="form-label">Pilote métier</label>
+          <input class="form-control" id="cu-pilote" value="${v('pilote_metier')}"></div>
+        <div class="form-group"><label class="form-label">ROI annuel (€)</label>
+          <input class="form-control" type="number" id="cu-roi" value="${v('roi_annuel')}"></div>
+        <div class="form-group"><label class="form-label">Origine</label>
+          <select class="form-control" id="cu-origine">
+            <option value="" ${!v('origine')?'selected':''}>— Non défini —</option>
+            <option value="FR" ${v('origine')==='FR'?'selected':''}>🇫🇷 KNDS France</option>
+            <option value="DE" ${v('origine')==='DE'?'selected':''}>🇩🇪 KNDS Allemagne</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Visibilité</label>
+          <select class="form-control" id="cu-visibilite">
+            <option value="common" ${(v('visibilite')||'common')==='common'?'selected':''}>🌍 Commun FR+DE</option>
+            <option value="FR" ${v('visibilite')==='FR'?'selected':''}>🇫🇷 Spécial France</option>
+            <option value="DE" ${v('visibilite')==='DE'?'selected':''}>🇩🇪 Spécial Allemagne</option>
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description / Objectif</label>
+        <textarea class="form-control" id="cu-desc" rows="4">${v('description')}</textarea></div>
+      <div class="form-group"><label class="form-label">Gain estimé</label>
+        <input class="form-control" id="cu-gain" value="${v('gain_estime')}"></div>
+      <div class="form-group"><label class="form-label">Lien Jira</label>
+        <input class="form-control" id="cu-jira" value="${v('jira_url')}"></div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="cu-app" ${v('application_disponible')?'checked':''}>
+          <span class="form-label" style="margin:0">Application disponible</span>
+        </label>
+      </div>
+      <div id="cu-app-fields" style="${v('application_disponible')?'':'display:none'}">
+        <div class="form-group"><label class="form-label">URL de l'application</label>
+          <input class="form-control" id="cu-app-url" value="${v('application_url')}"></div>
+        <div class="form-group"><label class="form-label">Conditions d'accès</label>
+          <input class="form-control" id="cu-conditions" value="${v('conditions_acces')}"></div>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Description</label>
-      <textarea class="form-control" id="cu-desc" rows="4">${v('description')}</textarea></div>
-    <div class="form-group"><label class="form-label">Gain estimé</label>
-      <input class="form-control" id="cu-gain" value="${v('gain_estime')}"></div>
-    <div class="form-group"><label class="form-label">Lien Jira</label>
-      <input class="form-control" id="cu-jira" value="${v('jira_url')}"></div>
-    <div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="cu-app" ${v('application_disponible')?'checked':''}>
-        <span class="form-label" style="margin:0">Application disponible</span>
-      </label>
+
+    <!-- ══ ONGLET BESOIN ══ -->
+    <div id="cu-tab-besoin" style="display:none">
+      <div class="alert alert-info mb-2" style="font-size:12px;">Ces champs correspondent aux informations du formulaire de soumission de besoin.</div>
+      <div class="form-group">
+        <label class="form-label">Contexte actuel</label>
+        <p class="text-sm text-muted mb-1">Problème à résoudre, fonctionnement actuel…</p>
+        <textarea class="form-control" id="ex-contexte" rows="4" maxlength="10000" placeholder="Décrivez le contexte et le problème actuel…">${ex('contexte')}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Objectif visé</label>
+        <p class="text-sm text-muted mb-1">Outil idéal, résultat attendu, fonctions envisagées…</p>
+        <textarea class="form-control" id="ex-objectif" rows="4" maxlength="10000" placeholder="Décrivez l'outil idéal, les fonctions attendues…">${ex('objectif')}</textarea>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Priorité souhaitée</label>
+          <select class="form-control" id="ex-priorite">
+            <option value="" ${!priorite?'selected':''}>— Non défini —</option>
+            <option value="Faible" ${priorite==='Faible'?'selected':''}>Faible</option>
+            <option value="Moyenne" ${priorite==='Moyenne'?'selected':''}>Moyenne</option>
+            <option value="Élevée" ${priorite==='Élevée'?'selected':''}>Élevée</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Titre suggéré (IA)</label>
+          <input class="form-control" id="ex-titre-ia" value="${ex('titre_ia')}" placeholder="Généré automatiquement par l'IA">
+        </div>
+      </div>
+      <div class="form-group" id="ex-justif-wrap" style="${showJustif?'':'display:none'}">
+        <label class="form-label">Justification de la priorité</label>
+        <textarea class="form-control" id="ex-justif" rows="2" maxlength="10000">${ex('justif_priorite')}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Commentaire complémentaire</label>
+        <textarea class="form-control" id="ex-commentaire" rows="2" maxlength="10000">${ex('commentaire_libre')||''}</textarea>
+      </div>
     </div>
-    <div id="cu-app-fields" style="${v('application_disponible')?'':'display:none'}">
-      <div class="form-group"><label class="form-label">URL de l'application</label>
-        <input class="form-control" id="cu-app-url" value="${v('application_url')}"></div>
-      <div class="form-group"><label class="form-label">Conditions d'accès</label>
-        <input class="form-control" id="cu-conditions" value="${v('conditions_acces')}"></div>
+
+    <!-- ══ ONGLET DONNÉES ══ -->
+    <div id="cu-tab-donnees" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Types de données d'entrée</label>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--gray-light);">
+          ${typesDonneesHTML}
+        </div>
+      </div>
+      <div class="form-group" id="ex-systemes-wrap" style="${showSystemes?'':'display:none'}">
+        <label class="form-label">Systèmes concernés</label>
+        <select class="form-control" id="ex-systemes" multiple size="5">${systemesOpts}</select>
+        <div class="text-sm text-muted mt-1">Ctrl/Cmd pour sélection multiple.</div>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Respect RGPD</label>
+          <select class="form-control" id="ex-rgpd">
+            <option value="" ${!ex('rgpd')?'selected':''}>— Non défini —</option>
+            <option value="Oui" ${ex('rgpd')==='Oui'?'selected':''}>Oui</option>
+            <option value="Non" ${ex('rgpd')==='Non'?'selected':''}>Non</option>
+            <option value="Pas encore connu" ${ex('rgpd')==='Pas encore connu'?'selected':''}>Pas encore connu</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Disponibilité des données</label>
+          <select class="form-control" id="ex-dispo-donnees">
+            <option value="" ${!ex('dispo_donnees')?'selected':''}>— Non défini —</option>
+            <option value="Oui" ${ex('dispo_donnees')==='Oui'?'selected':''}>Oui</option>
+            <option value="Non" ${ex('dispo_donnees')==='Non'?'selected':''}>Non</option>
+            <option value="Pas encore connu" ${ex('dispo_donnees')==='Pas encore connu'?'selected':''}>Pas encore connu</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confidentialité des données</label>
+          <select class="form-control" id="ex-confidentialite">
+            <option value="" ${!ex('confidentialite')?'selected':''}>— Non défini —</option>
+            <option value="Oui" ${ex('confidentialite')==='Oui'?'selected':''}>Oui</option>
+            <option value="Non" ${ex('confidentialite')==='Non'?'selected':''}>Non</option>
+            <option value="Pas encore connu" ${ex('confidentialite')==='Pas encore connu'?'selected':''}>Pas encore connu</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Accès données externes</label>
+          <select class="form-control" id="ex-donnees-externes">
+            <option value="" ${!ex('donnees_externes')?'selected':''}>— Non défini —</option>
+            <option value="Oui" ${ex('donnees_externes')==='Oui'?'selected':''}>Oui</option>
+            <option value="Non" ${ex('donnees_externes')==='Non'?'selected':''}>Non</option>
+            <option value="Pas encore connu" ${ex('donnees_externes')==='Pas encore connu'?'selected':''}>Pas encore connu</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sources des données</label>
+        <textarea class="form-control" id="ex-sources" rows="2" maxlength="10000" placeholder="Systèmes, espaces documentaires, documents…">${ex('sources_donnees')}</textarea>
+      </div>
+      <div class="form-group" id="ex-details-externes-wrap" style="${ex('donnees_externes')==='Oui'?'':'display:none'}">
+        <label class="form-label">Précisions données externes</label>
+        <textarea class="form-control" id="ex-details-externes" rows="2" maxlength="10000">${ex('details_externes')}</textarea>
+      </div>
+    </div>
+
+    <!-- ══ ONGLET ROI ══ -->
+    <div id="cu-tab-roi" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Bénéfice attendu</label>
+        <select class="form-control" id="ex-benefice">
+          <option value="" ${!benefice?'selected':''}>— Non défini —</option>
+          ${['Gain de temps','Réduction des coûts','Amélioration de la qualité','Aide à la décision','Réduction des risques','Autre']
+            .map(b=>`<option value="${b}" ${benefice===b?'selected':''}>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" id="ex-autre-ben-wrap" style="${showAutreBen?'':'display:none'}">
+        <label class="form-label">Précisions bénéfice</label>
+        <textarea class="form-control" id="ex-autre-ben" rows="2">${ex('autre_benefice')}</textarea>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label class="form-label">Temps actuel consacré</label>
+          <input class="form-control" type="number" id="ex-temps" value="${ex('temps_actuel')}" placeholder="Ex: 4" min="0"></div>
+        <div class="form-group"><label class="form-label">Unité de temps</label>
+          <select class="form-control" id="ex-unite">
+            ${['heure','jour','semaine','mois','année'].map(u=>`<option ${ex('unite_temps')===u?'selected':''}>${u}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Nombre de personnes impliquées</label>
+          <input class="form-control" type="number" id="ex-nb" value="${ex('nombre_personnes')}" min="1"></div>
+        <div class="form-group"><label class="form-label">Volume annuel (occurrences)</label>
+          <input class="form-control" type="number" id="ex-vol" value="${ex('volume_annuel')}" min="0"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gain estimé apporté par l'outil</label>
+        <textarea class="form-control" id="ex-gain-outil" rows="3" maxlength="10000" placeholder="Estimez le gain que l'outil pourrait apporter…">${ex('gain_outil')}</textarea>
+      </div>
     </div>
 
     <div class="modal-footer">
@@ -195,14 +367,60 @@ function _openEditModal(cuId, container) {
     </div>
   `);
 
+  // ── Tab switching ──────────────────────────────────────
+  document.querySelectorAll('.cu-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cu-tab-btn').forEach(b => {
+        b.style.color = 'var(--text-muted)';
+        b.style.borderBottom = 'none';
+        b.classList.remove('active');
+      });
+      btn.style.color = 'var(--blue)';
+      btn.style.borderBottom = '2px solid var(--blue)';
+      btn.style.marginBottom = '-2px';
+      btn.classList.add('active');
+      ['general','besoin','donnees','roi'].forEach(t => {
+        const el = document.getElementById(`cu-tab-${t}`);
+        if (el) el.style.display = btn.dataset.tab === t ? '' : 'none';
+      });
+    });
+  });
+
+  // ── Interactions ───────────────────────────────────────
   document.querySelector('#cu-app').addEventListener('change', e => {
     document.querySelector('#cu-app-fields').style.display = e.target.checked ? '' : 'none';
   });
 
+  document.querySelector('#ex-priorite').addEventListener('change', e => {
+    const wrap = document.querySelector('#ex-justif-wrap');
+    if (wrap) wrap.style.display = (e.target.value && e.target.value !== 'Faible') ? '' : 'none';
+  });
+
+  document.querySelector('#ex-benefice').addEventListener('change', e => {
+    const wrap = document.querySelector('#ex-autre-ben-wrap');
+    if (wrap) wrap.style.display = e.target.value === 'Autre' ? '' : 'none';
+  });
+
+  document.querySelectorAll('.cb-ex-type-donnee').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const any = [...document.querySelectorAll('.cb-ex-type-donnee')].some(c => c.value === 'Systèmes' && c.checked);
+      const wrap = document.querySelector('#ex-systemes-wrap');
+      if (wrap) wrap.style.display = any ? '' : 'none';
+    });
+  });
+
+  document.querySelector('#ex-donnees-externes')?.addEventListener('change', e => {
+    const wrap = document.querySelector('#ex-details-externes-wrap');
+    if (wrap) wrap.style.display = e.target.value === 'Oui' ? '' : 'none';
+  });
+
+  // ── Save ───────────────────────────────────────────────
   document.querySelector('#cu-save').addEventListener('click', () => {
     try {
       const nom = document.querySelector('#cu-nom').value.trim();
       if (!nom) { toast('Le nom est obligatoire.', 'danger'); return; }
+
+      // Collect main fields
       const data = {
         nom,
         statut:      document.querySelector('#cu-statut').value,
@@ -221,21 +439,57 @@ function _openEditModal(cuId, container) {
         origine:     document.querySelector('#cu-origine').value || null,
         visibilite:  document.querySelector('#cu-visibilite').value || 'common',
       };
+
+      // Collect extras (besoin/données/roi fields) — stored in commentaire as JSON
+      const typesDonnees = [...document.querySelectorAll('.cb-ex-type-donnee:checked')].map(c => c.value);
+      const systemesSelected = [...(document.querySelector('#ex-systemes')?.selectedOptions || [])].map(o => o.value);
+
+      const extrasObj = {
+        contexte:        document.querySelector('#ex-contexte')?.value.trim() || null,
+        objectif:        document.querySelector('#ex-objectif')?.value.trim() || null,
+        priorite:        document.querySelector('#ex-priorite')?.value || null,
+        justif_priorite: document.querySelector('#ex-justif')?.value.trim() || null,
+        titre_ia:        document.querySelector('#ex-titre-ia')?.value.trim() || null,
+        commentaire_libre: document.querySelector('#ex-commentaire')?.value.trim() || null,
+        types_donnees:   typesDonnees.length ? typesDonnees : null,
+        systemes_selectionnes: systemesSelected.length ? systemesSelected : null,
+        rgpd:            document.querySelector('#ex-rgpd')?.value || null,
+        dispo_donnees:   document.querySelector('#ex-dispo-donnees')?.value || null,
+        confidentialite: document.querySelector('#ex-confidentialite')?.value || null,
+        donnees_externes: document.querySelector('#ex-donnees-externes')?.value || null,
+        sources_donnees: document.querySelector('#ex-sources')?.value.trim() || null,
+        details_externes: document.querySelector('#ex-details-externes')?.value.trim() || null,
+        benefice_attendu: document.querySelector('#ex-benefice')?.value || null,
+        autre_benefice:  document.querySelector('#ex-autre-ben')?.value.trim() || null,
+        temps_actuel:    parseFloat(document.querySelector('#ex-temps')?.value) || null,
+        unite_temps:     document.querySelector('#ex-unite')?.value || null,
+        nombre_personnes: parseInt(document.querySelector('#ex-nb')?.value) || null,
+        volume_annuel:   parseInt(document.querySelector('#ex-vol')?.value) || null,
+        gain_outil:      document.querySelector('#ex-gain-outil')?.value.trim() || null,
+      };
+
+      const commentaireJSON = JSON.stringify(extrasObj);
+
       if (isNew) {
         const id = nextCuId(data.origine || null);
-        run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,conditions_acces,origine,visibilite)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,
+              roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,
+              conditions_acces,origine,visibilite,commentaire)
+             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [id, data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
            data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-           data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite]);
+           data.application_disponible, data.application_url, data.conditions_acces, data.origine,
+           data.visibilite, commentaireJSON]);
         toast(`CU créé : ${id}`, 'success');
       } else {
         run(`UPDATE use_cases SET nom=?,statut=?,type_besoin=?,technologie=?,type_sujet=?,responsable=?,
-          pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
-          application_url=?,conditions_acces=?,origine=?,visibilite=?,date_modification=datetime('now') WHERE cu_id=?`,
+              pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
+              application_url=?,conditions_acces=?,origine=?,visibilite=?,commentaire=?,
+              date_modification=datetime('now') WHERE cu_id=?`,
           [data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
            data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
-           data.application_disponible, data.application_url, data.conditions_acces, data.origine, data.visibilite, cuId]);
+           data.application_disponible, data.application_url, data.conditions_acces, data.origine,
+           data.visibilite, commentaireJSON, cuId]);
         toast(`${cuId} mis à jour.`, 'success');
       }
       saveDB();
@@ -248,6 +502,6 @@ function _openEditModal(cuId, container) {
   });
 }
 
-function getCurrentUsername() {
+function _getCurrentUsername() {
   try { return JSON.parse(localStorage.getItem('rcu_session'))?.user?.username || 'admin'; } catch { return 'admin'; }
 }

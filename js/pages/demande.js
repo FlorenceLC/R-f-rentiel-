@@ -2,6 +2,7 @@ import { query, queryOne, run, nextDemId, saveDB, getSetting } from '../modules/
 import { analyzeRequest, callAI, isAIAvailable } from '../modules/ai.js';
 import { toast, spinner, alertBox, statusBadge, formatROI, chip } from '../modules/ui.js';
 import { navigate } from '../app.js';
+import { sendRequestRecap } from '../modules/mailer.js';
 import { t } from '../modules/i18n.js';
 
 let _step = 1;
@@ -575,6 +576,7 @@ async function _runAI(container) {
     }
     if (navEl) navEl.style.display = 'flex';
     _saveRequest();
+    sendRequestRecap(_data).catch(e => console.warn('[mailer]', e));
     return;
   }
 
@@ -601,6 +603,7 @@ async function _runAI(container) {
       resultEl.innerHTML = alertBox('warning', `⚠️ Analyse IA indisponible : ${error}. Votre demande sera traitée manuellement.`);
     }
     _saveRequest();
+    sendRequestRecap(_data).catch(e => console.warn('[mailer]', e));
     return;
   }
 
@@ -658,6 +661,7 @@ async function _runAI(container) {
   }
 
   _saveRequest();
+  sendRequestRecap(_data).catch(e => console.warn('[mailer]', e));
 }
 
 function _saveRequest() {

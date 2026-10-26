@@ -1,8 +1,10 @@
 import { query, queryOne, getSetting } from '../modules/db.js';
-import { statusBadge, formatDate, formatROI, truncate, chip, sectionTitle, pagination, emptyState, alertBox, tabs } from '../modules/ui.js';
+import { statusBadge, formatDate, formatROI, truncate, chip, sectionTitle, pagination, emptyState, alertBox, tabs, openModal, closeModal, toast } from '../modules/ui.js';
 import { isAdmin } from '../modules/auth.js';
 import { navigate, setPageParam } from '../app.js';
 import { t, originLabel, visibilityLabel } from '../modules/i18n.js';
+import { callAI, isAIAvailable } from '../modules/ai.js';
+import { getLocalCU } from '../modules/localdb.js';
 
 const PAGE_SIZE = 25;
 
@@ -11,7 +13,13 @@ let _state = {
   tab: 'all', page: 1,
 };
 
-export function renderCatalogue(container, params = {}) {
+// Cache local CU (loaded once per render cycle)
+let _localCU = [];
+
+export async function renderCatalogue(container, params = {}) {
+  // Load local CU once
+  _localCU = await getLocalCU();
+
   if (params.cu_id) {
     _renderDetail(container, params.cu_id);
     return;
@@ -27,10 +35,12 @@ function _renderList(container) {
   const resps     = query(`SELECT DISTINCT responsable FROM use_cases WHERE actif=1 AND responsable IS NOT NULL ORDER BY responsable`).map(r=>r.responsable);
 
   const { rows, total } = _fetchRows();
+  const hasLocal = _localCU.length > 0;
 
   container.innerHTML = `
     <div class="hero" style="padding:20px 24px;">
       <h1>📚 ${t('catalogue.title')}</h1>
+      ${hasLocal ? `<div style="font-size:12px;color:#f6ad55;margin-top:4px;">📂 BDD locale active — ${_localCU.filter(c=>c.actif!==0).length} CU supplémentaires chargés (indépendant du Gist)</div>` : ''}
     </div>
 
     <div class="card mb-2">
@@ -80,7 +90,6 @@ function _renderList(container) {
 
   window._catPage = (p) => { _state.page = p; _refreshList(container); };
 
-  // Events
   container.querySelector('#cat-search').addEventListener('input', e => {
     _state.search = e.target.value; _state.page = 1; _refreshList(container);
   });
@@ -115,6 +124,17 @@ function _refreshList(container) {
   container.querySelector('.text-muted.text-sm.mb-2').textContent = `${total} cas d'usage`;
 }
 
+function _mergeAll() {
+  // Get SQL rows
+  const sqlRows = query(`SELECT * FROM use_cases WHERE actif=1 AND statut != 'Abandonné' ORDER BY date_creation DESC`);
+  // Get local CU (not already in SQL by cu_id)
+  const sqlIds = new Set(sqlRows.map(r => r.cu_id));
+  const localRows = _localCU
+    .filter(c => c.actif !== 0 && c.statut !== 'Abandonné' && !sqlIds.has(c.cu_id))
+    .map(c => ({ ...c, _source: 'local' }));
+  return [...sqlRows, ...localRows];
+}
+
 function _fetchRows() {
   const TAB_FILTER = {
     all:        [],
@@ -124,26 +144,30 @@ function _fetchRows() {
   };
   const statuts = TAB_FILTER[_state.tab] || [];
 
-  let where = `actif=1 AND statut != 'Abandonné'`;
-  const params = [];
+  let all = _mergeAll();
 
+  // Apply filters
   if (statuts.length) {
-    where += ` AND statut IN (${statuts.map(()=>'?').join(',')})`;
-    params.push(...statuts);
+    all = all.filter(r => statuts.includes(r.statut));
   }
   if (_state.search) {
-    where += ` AND (cu_id LIKE ? OR nom LIKE ? OR description LIKE ? OR responsable LIKE ? OR technologie LIKE ?)`;
-    const s = `%${_state.search}%`;
-    params.push(s,s,s,s,s);
+    const s = _state.search.toLowerCase();
+    all = all.filter(r =>
+      (r.cu_id||'').toLowerCase().includes(s) ||
+      (r.nom||'').toLowerCase().includes(s) ||
+      (r.description||'').toLowerCase().includes(s) ||
+      (r.responsable||'').toLowerCase().includes(s) ||
+      (r.technologie||'').toLowerCase().includes(s)
+    );
   }
-  if (_state.type)   { where += ` AND type_besoin=?`;  params.push(_state.type); }
-  if (_state.tech)   { where += ` AND technologie=?`;  params.push(_state.tech); }
-  if (_state.sujet)  { where += ` AND type_sujet=?`;   params.push(_state.sujet); }
-  if (_state.resp)   { where += ` AND responsable=?`;  params.push(_state.resp); }
+  if (_state.type)  all = all.filter(r => r.type_besoin === _state.type);
+  if (_state.tech)  all = all.filter(r => r.technologie === _state.tech);
+  if (_state.sujet) all = all.filter(r => r.type_sujet  === _state.sujet);
+  if (_state.resp)  all = all.filter(r => r.responsable === _state.resp);
 
-  const total = queryOne(`SELECT COUNT(*) AS n FROM use_cases WHERE ${where}`, params)?.n || 0;
+  const total  = all.length;
   const offset = (_state.page - 1) * PAGE_SIZE;
-  const rows   = query(`SELECT * FROM use_cases WHERE ${where} ORDER BY date_creation DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`, params);
+  const rows   = all.slice(offset, offset + PAGE_SIZE);
 
   return { rows, total };
 }
@@ -158,7 +182,7 @@ function _cuTable(rows) {
       </tr></thead>
       <tbody>
         ${rows.map(cu => `<tr style="cursor:pointer" onclick="navigate('catalogue',{cu_id:'${cu.cu_id}'})">
-          <td class="cu-id">${cu.cu_id}</td>
+          <td class="cu-id">${cu.cu_id}${cu._source==='local'?'<span style="font-size:9px;color:#f6ad55;margin-left:4px;">LOCAL</span>':''}</td>
           <td class="cu-name">${truncate(cu.nom,50)}</td>
           <td>${statusBadge(cu.statut)}</td>
           <td>${chip(cu.type_besoin,'type')}</td>
@@ -174,7 +198,14 @@ function _cuTable(rows) {
 }
 
 function _renderDetail(container, cuId) {
-  const cu = queryOne(`SELECT * FROM use_cases WHERE cu_id=? AND actif=1`, [cuId]);
+  // Look in SQL first, then local
+  let cu = queryOne(`SELECT * FROM use_cases WHERE cu_id=? AND actif=1`, [cuId]);
+  let isLocal = false;
+  if (!cu) {
+    cu = _localCU.find(c => c.cu_id === cuId && c.actif !== 0);
+    isLocal = !!cu;
+  }
+
   if (!cu) {
     container.innerHTML = `<div class="alert alert-danger">Cas d'usage "${cuId}" introuvable.</div>
       <button class="btn btn-outline mt-2" onclick="navigate('catalogue')">← ${t('nav.catalogue')}</button>`;
@@ -182,12 +213,26 @@ function _renderDetail(container, cuId) {
   }
 
   const admin = isAdmin();
+  const lang  = getSetting('app_lang', 'fr');
+  const targetLang = lang === 'fr' ? 'anglais' : 'français';
+  const targetLangLabel = lang === 'fr' ? '🇬🇧 EN' : '🇫🇷 FR';
+
   const appSection = cu.application_disponible ? `
     <div class="alert alert-success mt-2">
       🚀 Application disponible !
       ${cu.application_url ? `<a href="${cu.application_url}" target="_blank" class="btn btn-success btn-sm" style="margin-left:10px">Accéder →</a>` : ''}
       ${cu.conditions_acces ? `<div class="text-sm mt-1">${cu.conditions_acces}</div>` : ''}
     </div>` : '';
+
+  // Parse extras from commentaire if SQL CU
+  let extras = {};
+  if (!isLocal && cu.commentaire) {
+    try { extras = JSON.parse(cu.commentaire); } catch {}
+  } else if (isLocal) {
+    extras = cu; // local CU has all fields directly
+  }
+
+  const showFormData = extras.contexte || cu.contexte;
 
   container.innerHTML = `
     <button class="btn btn-ghost mb-2" onclick="navigate('catalogue')">← ${t('common.back')||t('nav.catalogue')}</button>
@@ -196,12 +241,23 @@ function _renderDetail(container, cuId) {
       <div class="cu-detail-header">
         <div>
           <span class="cu-id-tag">${cu.cu_id}</span>
+          ${isLocal ? '<span style="font-size:11px;background:#f6ad55;color:#1a202c;padding:2px 6px;border-radius:4px;margin-left:8px;">📂 BDD locale</span>' : ''}
           <h2 style="margin-top:10px;font-size:1.3rem;color:var(--blue-dark)">${cu.nom}</h2>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
           ${statusBadge(cu.statut)}
-          ${admin ? `<button class="btn btn-outline btn-sm" onclick="navigate('admin_catalogue',{cu_id:'${cu.cu_id}'})">✏️ Modifier</button>` : ''}
+          <button class="btn btn-outline btn-sm" id="btn-translate">🌐 Traduction ${targetLangLabel}</button>
+          ${admin && !isLocal ? `<button class="btn btn-outline btn-sm" onclick="navigate('admin_catalogue',{cu_id:'${cu.cu_id}'})">✏️ Modifier</button>` : ''}
         </div>
+      </div>
+
+      <!-- Translation panel (hidden by default) -->
+      <div id="translation-panel" style="display:none;margin:12px 0;padding:14px 16px;border:1px solid var(--blue);border-radius:8px;background:var(--blue-light,#eef3ff);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;color:var(--blue)">🌐 Traduction ${targetLangLabel}</span>
+          <button class="btn btn-ghost btn-sm" id="btn-close-translate">✕</button>
+        </div>
+        <div id="translation-content"><div class="text-muted text-sm">Chargement de la traduction…</div></div>
       </div>
 
       ${cu.description ? `<p style="color:var(--gray);margin-bottom:16px;line-height:1.6">${cu.description}</p>` : ''}
@@ -227,6 +283,90 @@ function _renderDetail(container, cuId) {
         </div>` : ''}
 
       ${cu.jira_url ? `<div class="mt-2"><a href="${cu.jira_url}" target="_blank" class="btn btn-ghost btn-sm">🔗 Lien Jira</a></div>` : ''}
+
+      ${showFormData ? `
+        <details class="mt-2" style="border-top:1px solid var(--border);padding-top:12px;">
+          <summary style="cursor:pointer;font-weight:600;color:var(--blue);font-size:13px;">📋 Informations du formulaire de besoin</summary>
+          <div class="detail-grid mt-2">
+            ${(extras.contexte||cu.contexte) ? `<div class="detail-item" style="grid-column:span 2"><div class="di-label">Contexte</div><div class="di-value" style="white-space:pre-wrap;font-size:13px">${extras.contexte||cu.contexte}</div></div>` : ''}
+            ${(extras.objectif||cu.objectif) ? `<div class="detail-item" style="grid-column:span 2"><div class="di-label">Objectif</div><div class="di-value" style="white-space:pre-wrap;font-size:13px">${extras.objectif||cu.objectif}</div></div>` : ''}
+            ${extras.priorite ? `<div class="detail-item"><div class="di-label">Priorité souhaitée</div><div class="di-value">${extras.priorite}</div></div>` : ''}
+            ${extras.benefice_attendu ? `<div class="detail-item"><div class="di-label">Bénéfice attendu</div><div class="di-value">${extras.benefice_attendu}</div></div>` : ''}
+            ${extras.types_donnees?.length ? `<div class="detail-item"><div class="di-label">Types de données</div><div class="di-value">${Array.isArray(extras.types_donnees)?extras.types_donnees.join(', '):extras.types_donnees}</div></div>` : ''}
+            ${extras.rgpd ? `<div class="detail-item"><div class="di-label">RGPD</div><div class="di-value">${extras.rgpd}</div></div>` : ''}
+            ${extras.gain_outil ? `<div class="detail-item" style="grid-column:span 2"><div class="di-label">Gain estimé (outil)</div><div class="di-value">${extras.gain_outil}</div></div>` : ''}
+          </div>
+        </details>` : ''}
     </div>
   `;
+
+  // ── Translation button ──────────────────────────────────
+  let _translating = false;
+  let _translated  = false;
+
+  container.querySelector('#btn-translate').addEventListener('click', async () => {
+    const panel = container.querySelector('#translation-panel');
+    const content = container.querySelector('#translation-content');
+    panel.style.display = '';
+
+    if (_translated) return; // already done
+    if (_translating) return;
+    _translating = true;
+
+    if (!isAIAvailable()) {
+      content.innerHTML = `<div class="alert alert-warning">⚠️ L'IA n'est pas configurée. Activez-la dans les Paramètres IA pour utiliser la traduction.</div>`;
+      _translating = false;
+      return;
+    }
+
+    const nom  = cu.nom || '';
+    const desc = cu.description || '';
+    if (!nom && !desc) {
+      content.innerHTML = `<div class="text-muted text-sm">Aucun contenu à traduire.</div>`;
+      _translating = false;
+      return;
+    }
+
+    const prompt = `Traduis en ${targetLang} le titre et la description/objectif du cas d'usage suivant. Réponds UNIQUEMENT en JSON valide, sans texte autour, sous ce format exact :
+{"titre":"...","description":"..."}
+
+Titre original : ${nom}
+Description/objectif : ${desc || '(aucune description)'}`;
+
+    const { ok, text } = await callAI(
+      `Tu es un traducteur professionnel spécialisé dans les projets de transformation digitale. Tu traduis uniquement en ${targetLang}. Réponds UNIQUEMENT en JSON.`,
+      prompt,
+      { temperature: 0.2, max_tokens: 600 }
+    );
+
+    if (!ok) {
+      content.innerHTML = `<div class="alert alert-warning">❌ Erreur de traduction : ${text}</div>`;
+      _translating = false;
+      return;
+    }
+
+    try {
+      const clean = text.trim().replace(/^```json?\s*/i,'').replace(/```\s*$/,'').trim();
+      const parsed = JSON.parse(clean);
+      content.innerHTML = `
+        <div style="margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Titre</span>
+          <div style="font-size:15px;font-weight:700;color:var(--blue-dark);margin-top:2px">${parsed.titre||'—'}</div>
+        </div>
+        ${parsed.description ? `
+        <div>
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Description</span>
+          <div style="font-size:13px;color:var(--text);line-height:1.6;margin-top:2px;white-space:pre-wrap">${parsed.description}</div>
+        </div>` : ''}`;
+      _translated = true;
+    } catch {
+      content.innerHTML = `<div class="text-sm text-muted">${text}</div>`;
+      _translated = true;
+    }
+    _translating = false;
+  });
+
+  container.querySelector('#btn-close-translate').addEventListener('click', () => {
+    container.querySelector('#translation-panel').style.display = 'none';
+  });
 }

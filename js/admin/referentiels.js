@@ -403,6 +403,15 @@ export function renderAdminParams(container) {
             <input type="checkbox" id="p-bilingual" ${gs('bilingual_mode')==='true'?'checked':''}>
             <span class="form-label" style="margin:0">Activer le mode bilingue KNDS FR/DE</span>
           </label>
+          <div class="form-group">
+            <label class="form-label">Pays de cette instance <span class="text-muted">(onglet Spécial)</span></label>
+            <select class="form-control" id="p-pays-admin">
+              <option value="" ${!gs('pays_admin')?'selected':''}>— Non défini (affiche les deux) —</option>
+              <option value="FR" ${gs('pays_admin')==='FR'?'selected':''}>🇫🇷 France — affiche uniquement "Spécial France"</option>
+              <option value="DE" ${gs('pays_admin')==='DE'?'selected':''}>🇩🇪 Allemagne — affiche uniquement "Spécial Allemagne"</option>
+            </select>
+            <div class="form-hint">Détermine quel onglet "Spécial" est affiché dans la navigation. Si non défini, les admins voient les deux onglets.</div>
+          </div>
           <div class="form-group"><label class="form-label">Libellé onglet France</label>
             <input class="form-control" id="p-tab-fr" value="${gs('special_tab_fr')||'Spécial France'}" placeholder="Spécial France"></div>
           <div class="form-group"><label class="form-label">Libellé onglet Allemagne</label>
@@ -482,7 +491,85 @@ export function renderAdminParams(container) {
         </div>
       </div>
     </div>
+
+    <!-- BDD Locale JSON -->
+    <div style="max-width:1000px;margin-bottom:32px;">
+      <div class="card">
+        <div class="section-title mb-2">📂 Base de données locale JSON (indépendante du Gist)</div>
+        <div class="alert alert-info" style="font-size:12px;margin-bottom:14px;">
+          Importez un fichier JSON de CU qui sera chargé <strong>en parallèle</strong> de la base SQLite principale, sans l'écraser et sans interférer avec la synchronisation Gist.
+          Les CU locaux apparaissent dans le catalogue avec un badge <span style="background:#f6ad55;color:#1a202c;padding:1px 5px;border-radius:3px;font-size:11px;">LOCAL</span>.
+        </div>
+        <div id="localdb-meta" style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Chargement…</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+          <div>
+            <div style="font-weight:600;margin-bottom:10px;">⬆️ Importer un fichier JSON local</div>
+            <div class="form-group">
+              <label class="form-label">Fichier JSON (.json)</label>
+              <input type="file" class="form-control" id="localdb-file" accept=".json">
+              <div class="form-hint">Format attendu : <code>{"use_cases": [...]}</code> ou tableau direct.</div>
+            </div>
+            <button class="btn btn-primary" id="localdb-import">📂 Charger en BDD locale</button>
+            <div id="localdb-import-status" class="text-sm mt-1"></div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:10px;">🗂️ Gestion de la BDD locale</div>
+            <div class="flex gap-1 mt-2">
+              <button class="btn btn-outline btn-sm" id="localdb-export">⬇️ Exporter la BDD locale</button>
+              <button class="btn btn-danger btn-sm" id="localdb-clear">🗑️ Supprimer la BDD locale</button>
+            </div>
+            <div id="localdb-action-status" class="text-sm mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
+
+  // ── Load local DB meta ────────────────────────────────────────────────────
+  (async () => {
+    const { getLocalDBMeta } = await import('../modules/localdb.js');
+    const meta = await getLocalDBMeta();
+    const metaEl = container.querySelector('#localdb-meta');
+    if (meta) {
+      metaEl.innerHTML = `✅ BDD locale active — <strong>${meta.count} CU</strong> chargés depuis <em>${meta.source_file || 'fichier inconnu'}</em>, importé le ${new Date(meta.imported_at).toLocaleString('fr-FR')}`;
+    } else {
+      metaEl.textContent = 'Aucune BDD locale importée.';
+    }
+  })();
+
+  container.querySelector('#localdb-import').addEventListener('click', async () => {
+    const file = container.querySelector('#localdb-file').files[0];
+    const statusEl = container.querySelector('#localdb-import-status');
+    if (!file) { statusEl.textContent = '⚠️ Sélectionnez un fichier JSON.'; return; }
+    statusEl.textContent = '⏳ Import en cours…';
+    const { importLocalDB } = await import('../modules/localdb.js');
+    const r = await importLocalDB(file);
+    if (r.ok) {
+      statusEl.innerHTML = `✅ Import réussi : <strong>${r.valid}</strong> CU chargés${r.invalid ? `, ${r.invalid} ignorés` : ''}.`;
+      // Refresh meta
+      const { getLocalDBMeta } = await import('../modules/localdb.js');
+      const meta = await getLocalDBMeta();
+      const metaEl = container.querySelector('#localdb-meta');
+      if (meta) metaEl.innerHTML = `✅ BDD locale active — <strong>${meta.count} CU</strong> chargés depuis <em>${meta.source_file}</em>`;
+    } else {
+      statusEl.innerHTML = `❌ ${r.msg}`;
+    }
+  });
+
+  container.querySelector('#localdb-export').addEventListener('click', async () => {
+    const statusEl = container.querySelector('#localdb-action-status');
+    const { exportLocalDB } = await import('../modules/localdb.js');
+    const r = await exportLocalDB();
+    statusEl.textContent = r.ok ? `✅ Export de ${r.count} CU téléchargé.` : `❌ ${r.msg}`;
+  });
+
+  container.querySelector('#localdb-clear').addEventListener('click', async () => {
+    if (!confirm('Supprimer la BDD locale ? Cela n\'affecte pas la base SQLite principale.')) return;
+    const { clearLocalDB } = await import('../modules/localdb.js');
+    await clearLocalDB();
+    container.querySelector('#localdb-meta').textContent = 'Aucune BDD locale importée.';
+    container.querySelector('#localdb-action-status').textContent = '✅ BDD locale supprimée.';
+  });
 
   // ── Save ──────────────────────────────────────────────────────────────────
   container.querySelector('#p-save').addEventListener('click', async () => {
@@ -495,6 +582,7 @@ export function renderAdminParams(container) {
     await ss('show_roi_public',   container.querySelector('#p-roi').checked ? 'true' : 'false');
     await ss('app_lang',          container.querySelector('#p-lang').value);
     await ss('bilingual_mode',    container.querySelector('#p-bilingual').checked ? 'true' : 'false');
+    await ss('pays_admin',        container.querySelector('#p-pays-admin').value || '');
     await ss('special_tab_fr',    container.querySelector('#p-tab-fr').value || 'Spécial France');
     await ss('special_tab_de',    container.querySelector('#p-tab-de').value || 'Spécial Allemagne');
     await ss('gist_id',           container.querySelector('#p-gist-id').value.trim());

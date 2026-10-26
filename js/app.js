@@ -115,15 +115,18 @@ function _buildSidebar() {
   const tabDELabel   = getSetting('special_tab_de', 'Spécial Allemagne');
 
   // Determine special tab label for this user
+  const paysAdmin = getSetting('pays_admin', ''); // FR | DE | ''
   let specialLabel = null;
   if (bilingual) {
-    if (admin) {
-      // Admin sees both — show both labels or generic
-      specialLabel = `🌍 ${t('nav.special')}`;
-    } else if (userPays === 'FR') {
-      specialLabel = `🇫🇷 ${tabFRLabel}`;
-    } else if (userPays === 'DE') {
-      specialLabel = `🇩🇪 ${tabDELabel}`;
+    if (!admin) {
+      // Visitor: use their own country
+      if (userPays === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
+      else if (userPays === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
+    } else {
+      // Admin: use pays_admin setting, fallback generic
+      if (paysAdmin === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
+      else if (paysAdmin === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
+      else specialLabel = `🌍 ${t('nav.special')}`;
     }
   }
 

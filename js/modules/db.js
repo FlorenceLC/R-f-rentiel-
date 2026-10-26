@@ -96,6 +96,8 @@ function _migrate() {
     ['app_contact_subject', 'Demande d\'information', 'Objet email contact',             'string'],
     ['app_contact_body',    '',                     'Corps email contact',                'string'],
     ['ai_gravitee_key',     '',                     'Clé Gravitee API Gateway',           'string'],
+    ['pays_admin',          '',                     'Pays de cette instance (FR/DE)',      'string'],
+    ['mail_api_url',        '',                     'URL API d\'envoi mail (optionnel)',    'string'],
   ];
   newSettings.forEach(([k, v, d, t]) => {
     try {
