@@ -4,7 +4,7 @@ import { toast, spinner, alertBox, statusBadge, formatROI, chip } from '../modul
 import { navigate } from '../app.js';
 import { sendRequestRecap } from '../modules/mailer.js';
 import { t } from '../modules/i18n.js';
-import { getDirections, heuresParAn, getRoiParams } from '../modules/roi.js';
+import { getDirections, heuresParAn, getRoiParams, dirCheckboxesHTML, readDirCheckboxes } from '../modules/roi.js';
 
 let _step = 1;
 let _data = {};
@@ -74,10 +74,6 @@ function _buildStep() {
           <option value="DE" ${_ent==='DE'?'selected':''}>🇩🇪 ${t('request.entity.de')}</option>
         </select></div>` : '';
 
-    const dirOptions = getDirections().map(d =>
-      `<option value="${d}" ${_data.direction===d?'selected':''}>${d}</option>`
-    ).join('');
-
     return `
     <div class="form-grid form-grid-2">
       <div class="form-group"><label class="form-label">${t('request.field.lastname')} <span class="required">*</span></label>
@@ -87,10 +83,8 @@ function _buildStep() {
       <div class="form-group"><label class="form-label">${t('request.field.email')} <span class="required">*</span></label>
         <input class="form-control" type="email" id="f-email" value="${_data.email||''}" placeholder="vous@entreprise.fr" maxlength="10000" required></div>
       <div class="form-group"><label class="form-label">${t('request.field.direction')} <span class="required">*</span></label>
-        <select class="form-control" id="f-direction">
-          <option value="" ${!_data.direction?'selected':''}>— Sélectionnez votre direction —</option>
-          ${dirOptions}
-        </select></div>
+        <div id="f-direction">${dirCheckboxesHTML(_data.direction, 'f-dir-cb')}</div>
+        <div class="form-hint">Plusieurs directions / services possibles.</div></div>
       ${entityField}
     </div>
     <div class="flex justify-end mt-2">
@@ -437,7 +431,7 @@ function _validateStep(stepEl) {
     const nom    = stepEl.querySelector('#f-nom')?.value.trim();
     const prenom = stepEl.querySelector('#f-prenom')?.value.trim();
     const email  = stepEl.querySelector('#f-email')?.value.trim();
-    const dir    = stepEl.querySelector('#f-direction')?.value.trim();
+    const dir    = readDirCheckboxes(stepEl, 'f-dir-cb');
     if (!nom || !prenom || !email || !dir) {
       toast('Veuillez remplir tous les champs obligatoires.', 'danger'); return false;
     }
@@ -501,7 +495,7 @@ function _collectStep(stepEl) {
     _data.nom       = stepEl.querySelector('#f-nom')?.value.trim();
     _data.prenom    = stepEl.querySelector('#f-prenom')?.value.trim();
     _data.email     = stepEl.querySelector('#f-email')?.value.trim();
-    _data.direction = stepEl.querySelector('#f-direction')?.value.trim();
+    _data.direction = readDirCheckboxes(stepEl, 'f-dir-cb');
     _data.entite    = stepEl.querySelector('#f-entite')?.value || null;
   }
 

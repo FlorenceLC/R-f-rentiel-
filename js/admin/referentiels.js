@@ -65,13 +65,18 @@ function _renderRef(container) {
   container.querySelectorAll('.dir-save').forEach(btn => btn.addEventListener('click', () => {
     const id = btn.dataset.id;
     const input = container.querySelector(`.dir-input[data-id="${id}"]`);
-    const oldName = input.dataset.old, newName = input.value.trim();
+    const oldName = input.dataset.old, newName = input.value.replace(/;/g, ',').trim();
     if (!newName) { toast('Le nom ne peut pas être vide.', 'danger'); return; }
     if (newName === oldName) return;
     if (queryOne(`SELECT id FROM directions WHERE libelle=? AND id!=?`, [newName, id])) { toast('Ce nom existe déjà.', 'danger'); return; }
     run(`UPDATE directions SET libelle=? WHERE id=?`, [newName, id]);
-    run(`UPDATE requests SET direction=? WHERE direction=?`, [newName, oldName]);
-    run(`UPDATE use_cases SET direction=? WHERE direction=?`, [newName, oldName]);
+    ['requests', 'use_cases'].forEach(tbl => {
+      query(`SELECT id, direction FROM ${tbl} WHERE direction LIKE ?`, ['%' + oldName + '%']).forEach(row => {
+        const parts = String(row.direction).split(';').map(x => x.trim());
+        if (!parts.includes(oldName)) return;
+        run(`UPDATE ${tbl} SET direction=? WHERE id=?`, [parts.map(x => x === oldName ? newName : x).join('; '), row.id]);
+      });
+    });
     saveDB();
     toast(`« ${oldName} » renommée en « ${newName} ».`, 'success');
     _renderRef(container);
@@ -87,7 +92,7 @@ function _renderRef(container) {
   }));
 
   container.querySelector('#dir-add').addEventListener('click', () => {
-    const name = container.querySelector('#dir-new').value.trim();
+    const name = container.querySelector('#dir-new').value.replace(/;/g, ',').trim();
     if (!name) { toast('Saisissez un nom.', 'danger'); return; }
     const existing = queryOne(`SELECT id,actif FROM directions WHERE libelle=?`, [name]);
     const maxO = queryOne(`SELECT MAX(ordre) AS m FROM directions`)?.m || 0;

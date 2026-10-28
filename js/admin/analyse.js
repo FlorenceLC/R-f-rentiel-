@@ -4,6 +4,8 @@
  * Utilise des graphiques SVG inline (pas de dépendance externe).
  */
 import { query, queryOne } from '../modules/db.js';
+import { mountRoiYearChart } from './roiChart.js';
+import { splitDirs } from '../modules/roi.js';
 import { formatROI, formatDate, statusBadge, chip, truncate } from '../modules/ui.js';
 
 export function renderAdminAnalyse(container) {
@@ -27,16 +29,6 @@ export function renderAdminAnalyse(container) {
     ORDER BY total DESC
   `);
 
-  const roiParAnnee = query(`
-    SELECT strftime('%Y', date_creation) AS annee,
-           COALESCE(SUM(roi_annuel),0)  AS total,
-           COUNT(*)                      AS nb
-    FROM use_cases
-    WHERE actif=1 AND roi_annuel IS NOT NULL AND statut != 'Abandonné'
-    GROUP BY annee
-    ORDER BY annee ASC
-  `);
-
   const adoption = query(`
     SELECT
       COUNT(*) FILTER (WHERE statut='Production' AND application_disponible=1) AS apps_dispo,
@@ -45,20 +37,21 @@ export function renderAdminAnalyse(container) {
     FROM use_cases WHERE actif=1
   `)[0] || {};
 
-  // Direction = colonne use_cases.direction (CU créés à la main ou issus d'une demande)
-  const roiParDir = query(`
-    SELECT TRIM(direction) AS dir,
-           COALESCE(SUM(roi_annuel),0) AS total,
-           COUNT(*) AS nb
-    FROM use_cases
-    WHERE actif=1 AND statut != 'Abandonné' AND direction IS NOT NULL AND TRIM(direction) != ''
-    GROUP BY TRIM(direction)
-    ORDER BY total DESC
+  // Direction(s) = colonne use_cases.direction (plusieurs séparées par « ; »).
+  // Un CU multi-directions : ROI réparti à parts égales, 1 CU compté pour chaque direction.
+  const cuAll = query(`
+    SELECT cu_id, statut, direction, COALESCE(roi_annuel,0) AS roi, date_creation
+    FROM use_cases WHERE actif=1 AND statut != 'Abandonné'
   `);
-  const sansDir = query(`
-    SELECT cu_id, COALESCE(roi_annuel,0) AS roi FROM use_cases
-    WHERE actif=1 AND statut != 'Abandonné' AND (direction IS NULL OR TRIM(direction)='')
-  `);
+  const dirMap = {};
+  const sansDir = [];
+  cuAll.forEach(cu => {
+    const ds = splitDirs(cu.direction);
+    if (!ds.length) { sansDir.push(cu); return; }
+    ds.forEach(d => { dirMap[d] ??= { dir: d, total: 0, nb: 0 }; dirMap[d].total += cu.roi / ds.length; dirMap[d].nb += 1; });
+  });
+  const roiParDir = Object.values(dirMap).sort((a, b) => b.total - a.total);
+  const yearRows = cuAll.map(cu => ({ annee: cu.date_creation ? String(cu.date_creation).slice(0, 4) : null, roi: cu.roi, statut: cu.statut, direction: cu.direction }));
   const sansRoi = query(`
     SELECT cu_id FROM use_cases
     WHERE actif=1 AND statut != 'Abandonné' AND (roi_annuel IS NULL OR roi_annuel <= 0)
@@ -113,23 +106,17 @@ export function renderAdminAnalyse(container) {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
-      <!-- ROI par année -->
-      <div class="card">
-        <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:16px;">📅 Évolution du ROI par année de création</div>
-        ${roiParAnnee.length
-          ? _lineAreaChart(roiParAnnee.map(r=>({ label:r.annee, value:r.total, sub:`${r.nb} CU` })))
-          : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Pas encore de données annuelles</div>'
-        }
-      </div>
-      <!-- ROI par direction -->
-      <div class="card">
-        <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:16px;">🏢 ROI par direction</div>
-        ${roiParDir.length
-          ? _horizontalBar(roiParDir.map(r=>({ label:r.dir||'—', value:r.total, sub:`${r.nb} CU` })))
-          : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Aucun CU n\'a de direction associée — renseignez la direction dans les fiches CU.</div>'
-        }
-      </div>
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:12px;">📅 Évolution du ROI par année de création</div>
+      <div id="roi-year-chart"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:16px;">🏢 ROI par direction <span style="font-weight:400;font-size:11px;color:var(--text-muted);">(ROI réparti à parts égales pour les CU multi-directions)</span></div>
+      ${roiParDir.length
+        ? _horizontalBar(roiParDir.map(r=>({ label:r.dir||'—', value:r.total, sub:`${r.nb} CU` })))
+        : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Aucun CU n\'a de direction associée — renseignez la direction dans les fiches CU.</div>'
+      }
     </div>
 
     <!-- Tableau des CU avec ROI (challenger) -->
@@ -141,6 +128,8 @@ export function renderAdminAnalyse(container) {
       ${_challengeTable(cuRoi)}
     </div>
   `;
+
+  mountRoiYearChart(container.querySelector('#roi-year-chart'), yearRows);
 }
 
 // ── Composants visuels ───────────────────────────────────────

@@ -151,3 +151,24 @@ export function buildCuExtras(req) {
 export function formatHeures(h) {
   return h == null ? '' : `${fr(h, 0)} h/an`;
 }
+
+// ── Multi-directions (stockées dans une seule colonne, séparées par « ; ») ──
+export function splitDirs(s) {
+  return String(s || '').split(';').map(x => x.trim()).filter(Boolean);
+}
+
+/** Liste de cases à cocher (sélection multiple) des directions / services */
+export function dirCheckboxesHTML(selected, cls) {
+  const sel = new Set(splitDirs(selected));
+  const list = [...getDirections()];
+  sel.forEach(d => { if (!list.includes(d)) list.push(d); });
+  const q = x => String(x).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<div style="border:1px solid var(--gray-border,#e2e8f0);border-radius:8px;padding:8px 10px;max-height:200px;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;">
+    ${list.map(d => `<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;">
+      <input type="checkbox" class="${cls}" value="${q(d)}" ${sel.has(d) ? 'checked' : ''}> <span>${q(d)}</span></label>`).join('')}
+  </div>`;
+}
+
+export function readDirCheckboxes(root, cls) {
+  return [...root.querySelectorAll(`input.${cls}:checked`)].map(i => i.value).join('; ');
+}

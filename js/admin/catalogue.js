@@ -1,7 +1,7 @@
 import { query, queryOne, run, saveDB, nextCuId, getSetting } from '../modules/db.js';
 import { statusBadge, formatDate, formatROI, truncate, chip, openModal, closeModal, toast, emptyState, pagination } from '../modules/ui.js';
 import { navigate } from '../app.js';
-import { getDirections, buildCuExtras, parseExtras, calcRoi, roiBoxHTML, formatHeures, heuresParAn } from '../modules/roi.js';
+import { dirCheckboxesHTML, readDirCheckboxes, getDirections, buildCuExtras, parseExtras, calcRoi, roiBoxHTML, formatHeures, heuresParAn } from '../modules/roi.js';
 
 const PAGE_SIZE = 25;
 let _page = 1, _search = '', _statut = '', _sujet = '';
@@ -147,9 +147,7 @@ function _openEditModal(cuId, container) {
   const resps     = query(`SELECT DISTINCT responsable FROM use_cases WHERE actif=1 AND responsable IS NOT NULL ORDER BY responsable`).map(r=>r.responsable);
 
   const _orig = isNew ? getSetting('pays_admin', '') : (cu.origine || '');
-  const _dirs = getDirections();
   const _dirCur = (cu && cu.direction) || extras.direction || '';
-  if (_dirCur && !_dirs.includes(_dirCur)) _dirs.push(_dirCur);
   const opt = (arr, val='') => arr.map(v=>`<option value="${v}" ${v==val?'selected':''}>${v}</option>`).join('');
   const v   = (field, def='') => cu ? (cu[field] ?? def) : def;
   const ex  = (field, def='') => extras[field] ?? def;
@@ -209,7 +207,7 @@ function _openEditModal(cuId, container) {
         <div class="form-group"><label class="form-label">ROI annuel (€)</label>
           <input class="form-control" type="number" id="cu-roi" value="${v('roi_annuel')}"></div>
         <div class="form-group"><label class="form-label">Direction / Service</label>
-          <select class="form-control" id="cu-direction"><option value=""></option>${opt(_dirs, _dirCur)}</select></div>
+          <div id="cu-direction">${dirCheckboxesHTML(_dirCur, 'cu-dir-cb')}</div></div>
         <div class="form-group"><label class="form-label">Origine</label>
           <select class="form-control" id="cu-origine">
             <option value="" ${!_orig?'selected':''}>— Non défini —</option>
@@ -492,7 +490,7 @@ function _openEditModal(cuId, container) {
         conditions_acces: document.querySelector('#cu-conditions').value || null,
         origine:     document.querySelector('#cu-origine').value || null,
         visibilite:  document.querySelector('#cu-visibilite').value || 'common',
-        direction:   document.querySelector('#cu-direction').value || null,
+        direction:   readDirCheckboxes(document, 'cu-dir-cb') || null,
       };
 
       // Collect extras (besoin/données/roi fields) — stored in commentaire as JSON
