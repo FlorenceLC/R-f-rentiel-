@@ -294,7 +294,7 @@ function _renderDetail(container, cuId) {
             ${extras.benefice_attendu ? `<div class="detail-item"><div class="di-label">Bénéfice attendu</div><div class="di-value">${extras.benefice_attendu}</div></div>` : ''}
             ${extras.types_donnees?.length ? `<div class="detail-item"><div class="di-label">Types de données</div><div class="di-value">${Array.isArray(extras.types_donnees)?extras.types_donnees.join(', '):extras.types_donnees}</div></div>` : ''}
             ${extras.rgpd ? `<div class="detail-item"><div class="di-label">RGPD</div><div class="di-value">${extras.rgpd}</div></div>` : ''}
-            ${extras.gain_outil ? `<div class="detail-item" style="grid-column:span 2"><div class="di-label">Gain estimé (outil)</div><div class="di-value">${extras.gain_outil}</div></div>` : ''}
+            ${admin && extras.gain_ia_pct != null ? `<div class="detail-item"><div class="di-label">Gain IA estimé</div><div class="di-value">${extras.gain_ia_pct} %</div></div>` : ''}
           </div>
         </details>` : ''}
     </div>

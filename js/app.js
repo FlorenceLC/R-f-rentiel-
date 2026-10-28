@@ -119,13 +119,9 @@ function _buildSidebar() {
   // Determine special tab label for this user
   const paysAdmin = getSetting('pays_admin', ''); // FR | DE | ''
   let specialLabel = null;
-  if (bilingual) {
-    // Both visitors AND admins see the special tab when bilingual mode is on.
-    // Label is driven by pays_admin setting (or user's country for visitors).
-    const targetPays = admin ? (paysAdmin || 'FR') : (userPays || paysAdmin || 'FR');
-    if (targetPays === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
-    else if (targetPays === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
-    else specialLabel = `🌍 ${t('nav.special')}`;
+  if (bilingual && paysAdmin) {
+    const lbl = getSetting('special_tab_label', '') || (paysAdmin === 'DE' ? tabDELabel : tabFRLabel);
+    specialLabel = `${paysAdmin === 'DE' ? '🇩🇪' : '🇫🇷'} ${lbl}`;
   }
 
   // Pending badge

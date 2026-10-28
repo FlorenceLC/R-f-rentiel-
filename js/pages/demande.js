@@ -4,6 +4,7 @@ import { toast, spinner, alertBox, statusBadge, formatROI, chip } from '../modul
 import { navigate } from '../app.js';
 import { sendRequestRecap } from '../modules/mailer.js';
 import { t } from '../modules/i18n.js';
+import { getDirections, heuresParAn, getRoiParams } from '../modules/roi.js';
 
 let _step = 1;
 let _data = {};
@@ -18,27 +19,6 @@ const STEP_ROI         = 4;
 const STEP_AI          = 5;
 const STEP_CONFIRM     = 6;
 
-const DIRECTIONS = [
-  'Direction Générale',
-  'Direction Financière',
-  'Direction des Ressources Humaines',
-  'Direction des Systèmes d\'Information',
-  'Direction Commerciale / Ventes',
-  'Direction Marketing',
-  'Direction des Achats',
-  'Direction de la Production',
-  'Direction Qualité',
-  'Direction Juridique',
-  'Direction de la Supply Chain / Logistique',
-  'Direction de la Recherche & Développement',
-  'Direction de la Communication',
-  'Direction de la Transformation / Innovation',
-  'Direction des Projets',
-  'Direction Industrielle',
-  'Direction Technique',
-  'Direction Sécurité',
-  'Autre',
-];
 
 const SYSTEMES_OPTIONS = [
   'SAP',
@@ -85,15 +65,16 @@ function _buildStep() {
   /* ─────────────── ÉTAPE 1 — IDENTITÉ ─────────────── */
   if (_step === STEP_IDENTITE) {
     const bilingual = getSetting('bilingual_mode', 'false') === 'true';
+    const _ent = _data.entite ?? getSetting('pays_admin', '');
     const entityField = bilingual ? `
       <div class="form-group"><label class="form-label">${t('request.field.entity')} <span class="required">*</span></label>
         <select class="form-control" id="f-entite">
-          <option value="" ${!_data.entite?'selected':''}>— Sélectionnez votre entité —</option>
-          <option value="FR" ${_data.entite==='FR'?'selected':''}>🇫🇷 ${t('request.entity.fr')}</option>
-          <option value="DE" ${_data.entite==='DE'?'selected':''}>🇩🇪 ${t('request.entity.de')}</option>
+          <option value="" ${!_ent?'selected':''}>— Sélectionnez votre entité —</option>
+          <option value="FR" ${_ent==='FR'?'selected':''}>🇫🇷 ${t('request.entity.fr')}</option>
+          <option value="DE" ${_ent==='DE'?'selected':''}>🇩🇪 ${t('request.entity.de')}</option>
         </select></div>` : '';
 
-    const dirOptions = DIRECTIONS.map(d =>
+    const dirOptions = getDirections().map(d =>
       `<option value="${d}" ${_data.direction===d?'selected':''}>${d}</option>`
     ).join('');
 
@@ -303,13 +284,7 @@ function _buildStep() {
       <div class="form-group"><label class="form-label">Volume annuel (occurrences) <span class="required">*</span></label>
         <input class="form-control" type="number" id="f-vol" value="${_data.volume_annuel||''}" min="0" placeholder="Ex: 52"></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Gain estimé apporté par l'outil <span class="required">*</span></label>
-      <p class="text-sm text-muted mb-1">Estimez le gain que l'outil pourrait vous apporter (temps économisé, réduction d'erreurs, économies…)</p>
-      <textarea class="form-control" id="f-gain-outil" rows="3" maxlength="10000"
-        placeholder="Ex : L'outil permettrait d'économiser 3h par semaine par personne, soit environ 150 jours/an sur l'équipe…">${_data.gain_outil||''}</textarea>
-    </div>
-    <div id="roi-preview"></div>
+    <div id="roi-preview">${_roiLabelHTML()}</div>
     <div class="flex justify-between mt-2">
       <button class="btn btn-ghost" id="btn-prev">← Retour</button>
       <button class="btn btn-primary" id="btn-next">Analyser avec l'IA →</button>
@@ -427,28 +402,34 @@ function _bindStep(container) {
     if (wrap) wrap.style.display = e.target.value === 'Autre' ? '' : 'none';
   });
 
-  // ROI preview
+  // ROI preview (étiquette calculée automatiquement, en heures/an)
   if (_step === STEP_ROI) {
     const update = () => {
-      const tVal = parseFloat(stepEl.querySelector('#f-temps')?.value) || 0;
-      const nVal = parseInt(stepEl.querySelector('#f-nb')?.value) || 0;
-      const vVal = parseInt(stepEl.querySelector('#f-vol')?.value) || 0;
-      const roi = tVal * nVal * vVal;
+      const h = heuresParAn({
+        temps_actuel:     parseFloat(stepEl.querySelector('#f-temps')?.value),
+        unite_temps:      stepEl.querySelector('#f-unite')?.value || 'heure',
+        nombre_personnes: parseInt(stepEl.querySelector('#f-nb')?.value),
+        volume_annuel:    stepEl.querySelector('#f-vol')?.value,
+      });
+      _data.roi_estime = h > 0 ? Math.round(h) : null;
       const prev = stepEl.querySelector('#roi-preview');
-      if (prev && roi > 0) {
-        const unite = stepEl.querySelector('#f-unite')?.value || 'heure';
-        prev.innerHTML = `<div class="roi-display mt-1">
-          <div class="roi-value">${roi.toLocaleString('fr-FR')}</div>
-          <div class="roi-label">${unite}s estimées libérées / an</div>
-        </div>`;
-        _data.roi_estime = roi;
-      } else if (prev) prev.innerHTML = '';
+      if (prev) prev.innerHTML = _roiLabelHTML();
     };
     ['#f-temps','#f-nb','#f-vol','#f-unite'].forEach(id => {
       stepEl.querySelector(id)?.addEventListener('input', update);
       stepEl.querySelector(id)?.addEventListener('change', update);
     });
+    update();
   }
+}
+
+function _roiLabelHTML() {
+  const h = _data.roi_estime;
+  if (!(h > 0)) return '';
+  return `<div class="roi-display mt-1">
+    <div class="roi-value">${Number(h).toLocaleString('fr-FR')}</div>
+    <div class="roi-label">heures de temps passé / an (base de calcul)</div>
+  </div>`;
 }
 
 function _validateStep(stepEl) {
@@ -500,7 +481,6 @@ function _validateStep(stepEl) {
     const temps = stepEl.querySelector('#f-temps')?.value;
     const nb    = stepEl.querySelector('#f-nb')?.value;
     const vol   = stepEl.querySelector('#f-vol')?.value;
-    const gain  = stepEl.querySelector('#f-gain-outil')?.value.trim();
     const ben   = stepEl.querySelector('#f-benefice')?.value;
     if (!ben) {
       toast('Veuillez sélectionner un bénéfice attendu.', 'danger'); return false;
@@ -510,9 +490,6 @@ function _validateStep(stepEl) {
     }
     if (!temps || !nb || !vol) {
       toast('Veuillez renseigner le temps actuel, le nombre de personnes et le volume annuel.', 'danger'); return false;
-    }
-    if (!gain) {
-      toast('Veuillez décrire le gain estimé que l\'outil pourrait apporter.', 'danger'); return false;
     }
   }
 
@@ -556,7 +533,8 @@ function _collectStep(stepEl) {
     _data.unite_temps       = stepEl.querySelector('#f-unite')?.value;
     _data.nombre_personnes  = parseInt(stepEl.querySelector('#f-nb')?.value) || null;
     _data.volume_annuel     = parseInt(stepEl.querySelector('#f-vol')?.value) || null;
-    _data.gain_outil        = stepEl.querySelector('#f-gain-outil')?.value.trim() || null;
+    const h = heuresParAn(_data);
+    _data.roi_estime        = h > 0 ? Math.round(h) : null; // heures/an (valeur de l'étiquette)
   }
 }
 
@@ -612,6 +590,9 @@ async function _runAI(container) {
   _data.type_besoin_ia  = data.type_besoin;
   _data.technologie_ia  = data.technologie;
   _data.analyse_ia      = data.analyse;
+  const gp = parseFloat(data.gain_ia_pct);
+  _data.gain_ia_pct     = (gp >= 0 && gp <= 100) ? gp : null;
+  _data.gain_ia_justif  = data.gain_ia_justification || null;
   _data.similar_cases   = data.similar_cases || [];
   _data.has_similarities = (data.similar_cases||[]).length > 0;
 
@@ -708,7 +689,10 @@ function _saveRequest() {
       details_externes: _data.details_externes||null,
       benefice_attendu: _data.benefice_attendu||null,
       autre_benefice: _data.autre_benefice||null,
-      gain_outil: _data.gain_outil||null,
+      commentaire_libre: _data.commentaire||null,
+      gain_ia_pct: _data.gain_ia_pct ?? null,
+      gain_ia_justif: _data.gain_ia_justif||null,
+      heures_an: _data.roi_estime ?? null,
     };
     run(`UPDATE requests SET commentaire = ? WHERE dem_id = ?`, [
       JSON.stringify(extras),

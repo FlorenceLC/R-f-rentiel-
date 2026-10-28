@@ -82,6 +82,32 @@ function _migrate() {
   addCol('use_cases', 'origine',    'TEXT DEFAULT NULL');
   addCol('use_cases', 'visibilite', "TEXT DEFAULT 'common'");
   addCol('requests',  'entite',     'TEXT DEFAULT NULL');
+  addCol('use_cases', 'direction',  'TEXT DEFAULT NULL');
+  try { // rattrape la direction des CU déjà créés depuis une demande
+    _db.run(`UPDATE use_cases SET direction=(SELECT direction FROM requests WHERE requests.id=use_cases.request_id)
+             WHERE (direction IS NULL OR direction='') AND request_id IS NOT NULL`);
+  } catch(e) { console.warn('[DB migrate] backfill direction:', e.message); }
+
+  // Table des directions/services personnalisables
+  try {
+    _db.run(`CREATE TABLE IF NOT EXISTS directions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      libelle TEXT UNIQUE NOT NULL,
+      actif INTEGER NOT NULL DEFAULT 1,
+      ordre INTEGER DEFAULT 0
+    )`);
+    const n = _db.exec(`SELECT COUNT(*) FROM directions`)[0]?.values?.[0]?.[0] || 0;
+    if (!n) {
+      [
+        'Direction Générale','Direction Financière','Direction des Ressources Humaines',
+        'Direction des Systèmes d\'Information','Direction Commerciale / Ventes','Direction Marketing',
+        'Direction des Achats','Direction de la Production','Direction Qualité','Direction Juridique',
+        'Direction de la Supply Chain / Logistique','Direction de la Recherche & Développement',
+        'Direction de la Communication','Direction de la Transformation / Innovation',
+        'Direction des Projets','Direction Industrielle','Direction Technique','Direction Sécurité','Autre',
+      ].forEach((l, i) => _db.run(`INSERT OR IGNORE INTO directions(libelle,ordre) VALUES(?,?)`, [l, i + 1]));
+    }
+  } catch(e) { console.warn('[DB migrate] directions:', e.message); }
 
   // New settings (INSERT OR IGNORE is safe to repeat)
   const newSettings = [
@@ -96,7 +122,10 @@ function _migrate() {
     ['app_contact_subject', 'Demande d\'information', 'Objet email contact',             'string'],
     ['app_contact_body',    '',                     'Corps email contact',                'string'],
     ['ai_gravitee_key',     '',                     'Clé Gravitee API Gateway',           'string'],
+    ['special_tab_label',   '',                     'Libellé de l\'onglet spécial',        'string'],
     ['pays_admin',          '',                     'Pays de cette instance (FR/DE)',      'string'],
+    ['roi_heures_jour',     '7.37',                 'ROI : heures travaillées par jour',  'number'],
+    ['roi_cout_horaire',    '112',                  'ROI : coût horaire (€/heure)',       'number'],
     ['mail_api_url',        '',                     'URL API d\'envoi mail (optionnel)',    'string'],
   ];
   newSettings.forEach(([k, v, d, t]) => {

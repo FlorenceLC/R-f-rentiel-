@@ -9,7 +9,7 @@ import { formatROI, formatDate, statusBadge, chip, truncate } from '../modules/u
 export function renderAdminAnalyse(container) {
   // ── Données ───────────────────────────────────────────────
   const cuRoi = query(`
-    SELECT cu_id, nom, statut, roi_annuel, technologie, type_besoin, direction_origine,
+    SELECT cu_id, nom, statut, roi_annuel, technologie, type_besoin,
            application_disponible, date_creation
     FROM use_cases
     WHERE actif=1 AND roi_annuel IS NOT NULL AND roi_annuel > 0 AND statut != 'Abandonné'
@@ -45,29 +45,32 @@ export function renderAdminAnalyse(container) {
     FROM use_cases WHERE actif=1
   `)[0] || {};
 
-  const topDirs = query(`
-    SELECT direction_origine AS dir,
+  // Direction = colonne use_cases.direction (CU créés à la main ou issus d'une demande)
+  const roiParDir = query(`
+    SELECT TRIM(direction) AS dir,
            COALESCE(SUM(roi_annuel),0) AS total,
            COUNT(*) AS nb
     FROM use_cases
-    WHERE actif=1 AND direction_origine IS NOT NULL AND statut != 'Abandonné'
-    GROUP BY direction_origine
+    WHERE actif=1 AND statut != 'Abandonné' AND direction IS NOT NULL AND TRIM(direction) != ''
+    GROUP BY TRIM(direction)
     ORDER BY total DESC
-    LIMIT 8
   `);
-
-  // Fallback : extraire direction depuis requests si direction_origine absent
-  const roiParDir = topDirs.length ? topDirs : query(`
-    SELECT r.direction AS dir,
-           COALESCE(SUM(uc.roi_annuel),0) AS total,
-           COUNT(*) AS nb
-    FROM use_cases uc
-    JOIN requests r ON uc.request_id = r.id
-    WHERE uc.actif=1 AND uc.statut != 'Abandonné'
-    GROUP BY r.direction
-    ORDER BY total DESC
-    LIMIT 8
+  const sansDir = query(`
+    SELECT cu_id, COALESCE(roi_annuel,0) AS roi FROM use_cases
+    WHERE actif=1 AND statut != 'Abandonné' AND (direction IS NULL OR TRIM(direction)='')
   `);
+  const sansRoi = query(`
+    SELECT cu_id FROM use_cases
+    WHERE actif=1 AND statut != 'Abandonné' AND (roi_annuel IS NULL OR roi_annuel <= 0)
+  `);
+  const nbCuTotal = queryOne(`SELECT COUNT(*) AS n FROM use_cases WHERE actif=1 AND statut != 'Abandonné'`)?.n || 0;
+  const idList = rows => rows.slice(0, 40).map(r => r.cu_id).join(', ') + (rows.length > 40 ? '…' : '');
+  const qualityBanner = (sansRoi.length || sansDir.length) ? `
+    <div style="background:#fffaf0;border:1px solid #f6ad55;border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#744210;">
+      <strong>⚠️ Qualité des données</strong> — ${nbCuTotal} CU pris en compte
+      ${sansRoi.length ? `<div style="margin-top:4px;">• <strong>${sansRoi.length} CU sans ROI calculé</strong> (non comptés dans les montants) <span style="opacity:.8;font-size:12px;">: ${idList(sansRoi)}</span></div>` : ''}
+      ${sansDir.length ? `<div style="margin-top:4px;">• <strong>${sansDir.length} CU sans direction associée</strong> (absents du graphique par direction, ROI cumulé : ${formatROI(sansDir.reduce((a,r)=>a+r.roi,0))}) <span style="opacity:.8;font-size:12px;">: ${idList(sansDir)}</span></div>` : ''}
+    </div>` : '';
 
   const totalConfirme = queryOne(`SELECT COALESCE(SUM(roi_annuel),0) AS v FROM use_cases WHERE actif=1 AND statut='Production'`)?.v || 0;
   const totalEstime   = queryOne(`SELECT COALESCE(SUM(roi_annuel),0) AS v FROM use_cases WHERE actif=1 AND statut != 'Abandonné'`)?.v || 0;
@@ -89,6 +92,8 @@ export function renderAdminAnalyse(container) {
       ${_kpi('🚀','Apps disponibles',`${nbApps} / ${nbProd}`,'#2b6cb0','#ebf4ff','#bee3f8','CU en production avec app')}
       ${_kpi('📈','Taux d\'adoption',`${tauxAdoption}%`,tauxAdoption>=80?'#276749':tauxAdoption>=40?'#c05621':'#c53030','#f7fafc','#edf2f7','Part des CU prod avec app dispo')}
     </div>
+
+    ${qualityBanner}
 
     <!-- Charts grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
@@ -122,7 +127,7 @@ export function renderAdminAnalyse(container) {
         <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:16px;">🏢 ROI par direction</div>
         ${roiParDir.length
           ? _horizontalBar(roiParDir.map(r=>({ label:r.dir||'—', value:r.total, sub:`${r.nb} CU` })))
-          : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Données de direction non disponibles — renseignez la direction dans les CU pour activer ce graphique.</div>'
+          : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Aucun CU n\'a de direction associée — renseignez la direction dans les fiches CU.</div>'
         }
       </div>
     </div>
@@ -206,7 +211,7 @@ function _horizontalBar(items) {
       <text x="${lblW + bW + 4}" y="${y + 17}" font-size="8.5" fill="#718096">${_shortROI(item.value)}</text>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:260px;">
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;">
     ${rows}
   </svg>`;
 }

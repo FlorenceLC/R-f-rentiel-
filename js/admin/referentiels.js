@@ -41,7 +41,63 @@ function _renderRef(container) {
           </div>`;
       }).join('')}
     </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">
+        <div class="card-title">🏢 Directions / Services</div>
+      </div>
+      <p class="text-sm text-muted" style="margin-bottom:10px;">Personnalisez les noms proposés dans le formulaire « Soumettre un besoin ». Renommer une direction met aussi à jour les demandes existantes.</p>
+      <div id="dir-list">
+        ${query(`SELECT * FROM directions WHERE actif=1 ORDER BY ordre,id`).map(d => `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--gray-border)">
+            <input class="form-control dir-input" data-id="${d.id}" data-old="${String(d.libelle).replace(/"/g,'&quot;')}" value="${String(d.libelle).replace(/"/g,'&quot;')}" style="flex:1;">
+            <button class="btn btn-outline btn-sm dir-save" data-id="${d.id}" title="Enregistrer le nom">💾</button>
+            <button class="btn btn-ghost btn-sm dir-del" data-id="${d.id}" title="Supprimer">🗑️</button>
+          </div>`).join('') || '<div class="text-muted text-sm">Aucune direction.</div>'}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <input class="form-control" id="dir-new" placeholder="Nouvelle direction / service…" style="flex:1;">
+        <button class="btn btn-success" id="dir-add">+ Ajouter</button>
+      </div>
+    </div>
   `;
+
+  container.querySelectorAll('.dir-save').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.id;
+    const input = container.querySelector(`.dir-input[data-id="${id}"]`);
+    const oldName = input.dataset.old, newName = input.value.trim();
+    if (!newName) { toast('Le nom ne peut pas être vide.', 'danger'); return; }
+    if (newName === oldName) return;
+    if (queryOne(`SELECT id FROM directions WHERE libelle=? AND id!=?`, [newName, id])) { toast('Ce nom existe déjà.', 'danger'); return; }
+    run(`UPDATE directions SET libelle=? WHERE id=?`, [newName, id]);
+    run(`UPDATE requests SET direction=? WHERE direction=?`, [newName, oldName]);
+    run(`UPDATE use_cases SET direction=? WHERE direction=?`, [newName, oldName]);
+    saveDB();
+    toast(`« ${oldName} » renommée en « ${newName} ».`, 'success');
+    _renderRef(container);
+  }));
+
+  container.querySelectorAll('.dir-del').forEach(btn => btn.addEventListener('click', () => {
+    const input = container.querySelector(`.dir-input[data-id="${btn.dataset.id}"]`);
+    if (!confirm(`Supprimer « ${input.dataset.old} » de la liste ? (les demandes existantes la conservent)`)) return;
+    run(`UPDATE directions SET actif=0 WHERE id=?`, [btn.dataset.id]);
+    saveDB();
+    toast('Direction supprimée de la liste.', 'warning');
+    _renderRef(container);
+  }));
+
+  container.querySelector('#dir-add').addEventListener('click', () => {
+    const name = container.querySelector('#dir-new').value.trim();
+    if (!name) { toast('Saisissez un nom.', 'danger'); return; }
+    const existing = queryOne(`SELECT id,actif FROM directions WHERE libelle=?`, [name]);
+    const maxO = queryOne(`SELECT MAX(ordre) AS m FROM directions`)?.m || 0;
+    if (existing?.actif) { toast('Cette direction existe déjà.', 'danger'); return; }
+    if (existing) run(`UPDATE directions SET actif=1, ordre=? WHERE id=?`, [maxO + 1, existing.id]);
+    else run(`INSERT INTO directions(libelle,ordre) VALUES(?,?)`, [name, maxO + 1]);
+    saveDB();
+    toast('Direction ajoutée.', 'success');
+    _renderRef(container);
+  });
 
   window._addRef = (table) => {
     openModal(`
@@ -381,6 +437,15 @@ export function renderAdminParams(container) {
             <span class="form-label" style="margin:0">Afficher les ROI aux visiteurs</span>
           </label>
         </div>
+
+        <div class="card mb-2">
+          <div class="section-title mb-2">💶 Calcul du ROI</div>
+          <div class="form-group"><label class="form-label">Heures travaillées par jour</label>
+            <input class="form-control" type="number" step="0.01" min="0" id="p-roi-hj" value="${gs('roi_heures_jour')||'7.37'}"></div>
+          <div class="form-group"><label class="form-label">Coût horaire (€/heure)</label>
+            <input class="form-control" type="number" step="0.01" min="0" id="p-roi-ch" value="${gs('roi_cout_horaire')||'112'}"></div>
+          <div class="form-hint">Heures = jours × h/jour · Coût = heures × €/h · ROI/livrable = coût × gain IA % · ROI annuel = ROI/livrable × livrables/an.</div>
+        </div>
       </div>
 
       <!-- Colonne droite -->
@@ -398,25 +463,23 @@ export function renderAdminParams(container) {
         </div>
 
         <div class="card mb-2">
-          <div class="section-title mb-2">🏴 Mode bilingue FR / DE</div>
+          <div class="section-title mb-2">🏴 Mode spécial KNDS FR / DE</div>
+          <div class="form-group">
+            <label class="form-label">Pays de cette instance</label>
+            <select class="form-control" id="p-pays-admin">
+              <option value="" ${!gs('pays_admin')?'selected':''}>— Non défini —</option>
+              <option value="FR" ${gs('pays_admin')==='FR'?'selected':''}>🇫🇷 France</option>
+              <option value="DE" ${gs('pays_admin')==='DE'?'selected':''}>🇩🇪 Allemagne</option>
+            </select>
+            <div class="form-hint">Pays appliqué à toute l'application (admin et visiteur) : il est présélectionné dans le formulaire de demande et à la création d'une fiche CU.</div>
+          </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px">
             <input type="checkbox" id="p-bilingual" ${gs('bilingual_mode')==='true'?'checked':''}>
-            <span class="form-label" style="margin:0">Activer le mode bilingue KNDS FR/DE</span>
+            <span class="form-label" style="margin:0">Activer le mode spécial KNDS FR/DE</span>
           </label>
-          <div class="form-group">
-            <label class="form-label">Pays de cette instance <span class="text-muted">(onglet Spécial)</span></label>
-            <select class="form-control" id="p-pays-admin">
-              <option value="" ${!gs('pays_admin')?'selected':''}>— Non défini (affiche les deux) —</option>
-              <option value="FR" ${gs('pays_admin')==='FR'?'selected':''}>🇫🇷 France — affiche uniquement "Spécial France"</option>
-              <option value="DE" ${gs('pays_admin')==='DE'?'selected':''}>🇩🇪 Allemagne — affiche uniquement "Spécial Allemagne"</option>
-            </select>
-            <div class="form-hint">Détermine quel onglet "Spécial" est affiché dans la navigation. Si non défini, les admins voient les deux onglets.</div>
-          </div>
-          <div class="form-group"><label class="form-label">Libellé onglet France</label>
-            <input class="form-control" id="p-tab-fr" value="${gs('special_tab_fr')||'Spécial France'}" placeholder="Spécial France"></div>
-          <div class="form-group"><label class="form-label">Libellé onglet Allemagne</label>
-            <input class="form-control" id="p-tab-de" value="${gs('special_tab_de')||'Spécial Allemagne'}" placeholder="Spécial Allemagne"></div>
-          <div class="form-hint">Les CU marqués comme "Spécial FR" ou "Spécial DE" apparaissent dans l'onglet correspondant.</div>
+          <div class="form-group"><label class="form-label">Libellé de l'onglet spécial</label>
+            <input class="form-control" id="p-tab-label" value="${gs('special_tab_label') || (gs('pays_admin')==='DE' ? (gs('special_tab_de')||'Spécial Allemagne') : gs('pays_admin')==='FR' ? (gs('special_tab_fr')||'Spécial France') : '')}" placeholder="Spécial France / Spécial Allemagne"></div>
+          <div class="form-hint">L'onglet n'est affiché que si le mode spécial est activé et qu'un pays est défini. Les CU « Spécial FR » ou « Spécial DE » y apparaissent.</div>
         </div>
 
         <div class="card mb-2">
@@ -572,6 +635,11 @@ export function renderAdminParams(container) {
   });
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  container.querySelector('#p-pays-admin').addEventListener('change', e => {
+    const d = { FR: 'Spécial France', DE: 'Spécial Allemagne' }[e.target.value] || '';
+    container.querySelector('#p-tab-label').value = d;
+  });
+
   container.querySelector('#p-save').addEventListener('click', async () => {
     await ss('app_name',          container.querySelector('#p-name').value);
     await ss('app_department',    container.querySelector('#p-dept').value);
@@ -580,11 +648,12 @@ export function renderAdminParams(container) {
     await ss('app_contact_subject', container.querySelector('#p-subject').value);
     await ss('app_contact_body',  container.querySelector('#p-body').value);
     await ss('show_roi_public',   container.querySelector('#p-roi').checked ? 'true' : 'false');
+    await ss('roi_heures_jour',   container.querySelector('#p-roi-hj').value || '7.37');
+    await ss('roi_cout_horaire',  container.querySelector('#p-roi-ch').value || '112');
     await ss('app_lang',          container.querySelector('#p-lang').value);
     await ss('bilingual_mode',    container.querySelector('#p-bilingual').checked ? 'true' : 'false');
     await ss('pays_admin',        container.querySelector('#p-pays-admin').value || '');
-    await ss('special_tab_fr',    container.querySelector('#p-tab-fr').value || 'Spécial France');
-    await ss('special_tab_de',    container.querySelector('#p-tab-de').value || 'Spécial Allemagne');
+    await ss('special_tab_label', container.querySelector('#p-tab-label').value.trim());
     await ss('gist_id',           container.querySelector('#p-gist-id').value.trim());
     await ss('gist_token',        container.querySelector('#p-gist-token').value.trim());
     toast('Paramètres enregistrés. Rechargement…', 'success');

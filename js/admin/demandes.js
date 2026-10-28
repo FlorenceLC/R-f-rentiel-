@@ -2,6 +2,7 @@ import { query, queryOne, run, saveDB, nextCuId } from '../modules/db.js';
 import { statusBadge, formatDate, formatROI, truncate, chip, openModal, closeModal, toast, emptyState, pagination, sectionTitle, alertBox } from '../modules/ui.js';
 import { getCurrentUsername } from '../modules/auth.js';
 import { navigate } from '../app.js';
+import { buildCuExtras, calcRoi, roiBoxHTML, formatHeures } from '../modules/roi.js';
 
 const PAGE_SIZE = 20;
 let _page = 1;
@@ -182,6 +183,12 @@ window._openDemande = (demId) => {
   const sujets = query(`SELECT libelle FROM subject_types WHERE actif=1 ORDER BY ordre`).map(x=>x.libelle);
   const resps = query(`SELECT DISTINCT responsable FROM use_cases WHERE actif=1 AND responsable IS NOT NULL ORDER BY responsable`).map(x=>x.responsable);
 
+  const ex = buildCuExtras(r);
+  const calc = calcRoi(ex, ex.gain_ia_pct);
+  const esc = v => String(v ?? '').replace(/</g,'&lt;');
+  const row = (l, v) => (v == null || v === '' || (Array.isArray(v) && !v.length)) ? '' :
+    `<div class="detail-item"><div class="di-label">${l}</div><div class="di-value" style="white-space:pre-wrap">${esc(Array.isArray(v) ? v.join(', ') : v)}</div></div>`;
+
   const opt = (arr, sel='') => `<option value=""></option>${arr.map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join('')}`;
 
   openModal(`
@@ -203,9 +210,33 @@ window._openDemande = (demId) => {
       <div style="font-size:13px;line-height:1.6">${r.contexte}</div>
       <div style="font-weight:600;margin:10px 0 4px;font-size:12px;text-transform:uppercase;color:var(--gray)">Objectif</div>
       <div style="font-size:13px;line-height:1.6">${r.objectif}</div>
-      ${r.commentaire ? `<div style="font-weight:600;margin:10px 0 4px;font-size:12px;text-transform:uppercase;color:var(--gray)">Commentaire</div>
-      <div style="font-size:13px">${r.commentaire}</div>` : ''}
+      ${ex.commentaire_libre ? `<div style="font-weight:600;margin:10px 0 4px;font-size:12px;text-transform:uppercase;color:var(--gray)">Commentaire</div>
+      <div style="font-size:13px">${esc(ex.commentaire_libre)}</div>` : ''}
     </div>
+
+    <details class="mb-2" open style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
+      <summary style="cursor:pointer;font-weight:600;color:var(--blue);font-size:13px;">📝 Informations saisies par le métier (Besoin / Données / ROI)</summary>
+      <div class="detail-grid mt-2">
+        ${row('Titre suggéré (IA)', ex.titre_ia)}
+        ${row('Priorité souhaitée', ex.priorite)}
+        ${row('Justification priorité', ex.justif_priorite)}
+        ${row('Types de données', ex.types_donnees)}
+        ${row('Systèmes concernés', ex.systemes_selectionnes)}
+        ${row('RGPD', ex.rgpd)}
+        ${row('Disponibilité des données', ex.dispo_donnees)}
+        ${row('Confidentialité', ex.confidentialite)}
+        ${row('Données externes', ex.donnees_externes)}
+        ${row('Précisions données externes', ex.details_externes)}
+        ${row('Sources des données', ex.sources_donnees)}
+        ${row('Bénéfice attendu', ex.benefice_attendu)}
+        ${row('Précisions bénéfice', ex.autre_benefice)}
+        ${row('Temps actuel', ex.temps_actuel != null ? `${ex.temps_actuel} ${ex.unite_temps||''}` : null)}
+        ${row('Personnes impliquées', ex.nombre_personnes)}
+        ${row('Volume annuel', ex.volume_annuel)}
+        ${row('Temps passé / an (heures)', formatHeures(ex.heures_an))}
+        ${row('Gain IA estimé', ex.gain_ia_pct != null ? ex.gain_ia_pct + ' %' : null)}
+      </div>
+    </details>
 
     ${r.analyse_ia ? `<div class="alert alert-info mb-2">🤖 <strong>Analyse IA :</strong> ${r.analyse_ia}<br>
       Type : ${chip(r.type_besoin_ia,'type')} — Techno : ${chip(r.technologie_ia,'tech')}</div>` : ''}
@@ -237,7 +268,8 @@ window._openDemande = (demId) => {
           <input class="form-control" id="adm-jira" placeholder="https://jira…" value="${r.jira_url_admin||''}"></div>
       </div>
       <div class="form-group"><label class="form-label">ROI définitif (€/an)</label>
-        <input class="form-control" type="number" id="adm-roi" value="${r.roi_definitif||''}"></div>
+        <input class="form-control" type="number" id="adm-roi" value="${r.roi_definitif ?? calc.roi ?? ''}"></div>
+      ${roiBoxHTML(calc)}
     </div>
 
     <div id="reject-section" style="display:none;margin-top:12px;">
@@ -302,16 +334,24 @@ function _validateRequest(r, adm) {
   const cuId = nextCuId(r.entite || null);
   const user = getCurrentUsername();
   const origineFromRequest = r.entite || null;
-  run(`INSERT INTO use_cases(cu_id,nom,description,type_besoin,type_sujet,statut,responsable,pilote_metier,technologie,roi_annuel,jira_url,origine,visibilite,request_id)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [cuId, r.objectif || r.dem_id, r.contexte, adm.type||r.type_besoin_ia||null,
+  const ex = buildCuExtras(r);
+  const roiCalc = calcRoi(ex, ex.gain_ia_pct);
+  const roiFinal = adm.roi ?? roiCalc.roi ?? null;
+  // Titre = titre suggéré par l'IA ; à défaut, début de l'objectif
+  const titre = (ex.titre_ia && ex.titre_ia.trim())
+    || (r.objectif ? (r.objectif.length > 80 ? r.objectif.slice(0, 80) + '…' : r.objectif) : r.dem_id);
+  const gainEstime = formatHeures(ex.heures_an) || null;
+
+  run(`INSERT INTO use_cases(cu_id,nom,description,type_besoin,type_sujet,statut,responsable,pilote_metier,technologie,roi_annuel,gain_estime,jira_url,origine,visibilite,request_id,commentaire,direction)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [cuId, titre, r.contexte, adm.type||r.type_besoin_ia||null,
      adm.sujet||null, 'Besoin identifié', adm.resp||null, adm.pilote||null,
-     adm.tech||r.technologie_ia||null, adm.roi||null, adm.jira||null,
-     origineFromRequest, 'common', r.id]);
+     adm.tech||r.technologie_ia||null, roiFinal, gainEstime, adm.jira||null,
+     origineFromRequest, 'common', r.id, JSON.stringify(ex), r.direction || null]);
   run(`UPDATE requests SET statut='Validée', type_besoin_admin=?, technologie_admin=?, type_sujet_admin=?,
     responsable_admin=?, pilote_metier_admin=?, jira_url_admin=?, roi_definitif=?,
     traite_par=?, date_traitement=datetime('now'), use_case_id=(SELECT id FROM use_cases WHERE cu_id=?)
     WHERE dem_id=?`,
-    [adm.type, adm.tech, adm.sujet, adm.resp, adm.pilote, adm.jira, adm.roi, user, cuId, r.dem_id]);
+    [adm.type, adm.tech, adm.sujet, adm.resp, adm.pilote, adm.jira, roiFinal, user, cuId, r.dem_id]);
   saveDB();
 }

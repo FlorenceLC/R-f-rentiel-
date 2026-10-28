@@ -89,7 +89,7 @@ function _buildTextBody(data, extras, appName) {
     data.nombre_personnes ? `Personnes         : ${data.nombre_personnes}` : null,
     data.volume_annuel    ? `Volume/an         : ${data.volume_annuel} occurrence(s)` : null,
     roi                   ? `ROI calculé       : ${roi}` : null,
-    e.gain_outil          ? `Gain estimé       : ${e.gain_outil}` : null,
+    e.gain_ia_pct != null ? `Gain IA estimé    : ${e.gain_ia_pct} %` : null,
     ``,
     e.titre_ia ? `──── ANALYSE IA ────` : null,
     e.titre_ia        ? `Titre suggéré     : ${e.titre_ia}` : null,
@@ -191,7 +191,7 @@ function _buildHtmlBody(data, extras, appName) {
       data.nombre_personnes? row('👥', 'Personnes impliquées', `${data.nombre_personnes}`) : '',
       data.volume_annuel   ? row('🔁', 'Volume annuel', `${data.volume_annuel} occurrence(s)`) : '',
       roi                  ? row('📈', 'ROI calculé', roi, true) : '',
-      e.gain_outil         ? row('✨', 'Gain estimé', `<span style="white-space:pre-wrap;">${e.gain_outil}</span>`) : '',
+      e.gain_ia_pct != null ? row('✨', 'Gain IA estimé', `${e.gain_ia_pct} %`) : '',
     ])}
 
     ${(e.titre_ia || data.type_besoin_ia) ? section('🤖', 'Analyse IA', [

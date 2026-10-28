@@ -1,6 +1,7 @@
-import { query, queryOne, run, saveDB, nextCuId } from '../modules/db.js';
+import { query, queryOne, run, saveDB, nextCuId, getSetting } from '../modules/db.js';
 import { statusBadge, formatDate, formatROI, truncate, chip, openModal, closeModal, toast, emptyState, pagination } from '../modules/ui.js';
 import { navigate } from '../app.js';
+import { getDirections, buildCuExtras, parseExtras, calcRoi, roiBoxHTML, formatHeures, heuresParAn } from '../modules/roi.js';
 
 const PAGE_SIZE = 25;
 let _page = 1, _search = '', _statut = '', _sujet = '';
@@ -127,10 +128,16 @@ function _openEditModal(cuId, container) {
   const cu = cuId ? queryOne(`SELECT * FROM use_cases WHERE cu_id=?`, [cuId]) : null;
   const isNew = !cu;
 
-  // Parse extras from commentaire
-  let extras = {};
-  if (cu?.commentaire) {
-    try { extras = JSON.parse(cu.commentaire); } catch {}
+  // Données du formulaire : extras sauvegardés, complétés par la demande d'origine (pré-remplissage)
+  let extras = parseExtras(cu?.commentaire);
+  if (cu?.request_id) {
+    const req = queryOne(`SELECT * FROM requests WHERE id=?`, [cu.request_id]);
+    if (req) {
+      const fromReq = buildCuExtras(req);
+      Object.keys(fromReq).forEach(k => {
+        if (extras[k] == null || extras[k] === '') extras[k] = fromReq[k];
+      });
+    }
   }
 
   const needTypes = query(`SELECT libelle FROM need_types WHERE actif=1 ORDER BY ordre`).map(r=>r.libelle);
@@ -139,6 +146,10 @@ function _openEditModal(cuId, container) {
   const statuts   = ['Besoin identifié','Cadrage','POC','En développement','Production','Abandonné'];
   const resps     = query(`SELECT DISTINCT responsable FROM use_cases WHERE actif=1 AND responsable IS NOT NULL ORDER BY responsable`).map(r=>r.responsable);
 
+  const _orig = isNew ? getSetting('pays_admin', '') : (cu.origine || '');
+  const _dirs = getDirections();
+  const _dirCur = (cu && cu.direction) || extras.direction || '';
+  if (_dirCur && !_dirs.includes(_dirCur)) _dirs.push(_dirCur);
   const opt = (arr, val='') => arr.map(v=>`<option value="${v}" ${v==val?'selected':''}>${v}</option>`).join('');
   const v   = (field, def='') => cu ? (cu[field] ?? def) : def;
   const ex  = (field, def='') => extras[field] ?? def;
@@ -197,11 +208,13 @@ function _openEditModal(cuId, container) {
           <input class="form-control" id="cu-pilote" value="${v('pilote_metier')}"></div>
         <div class="form-group"><label class="form-label">ROI annuel (€)</label>
           <input class="form-control" type="number" id="cu-roi" value="${v('roi_annuel')}"></div>
+        <div class="form-group"><label class="form-label">Direction / Service</label>
+          <select class="form-control" id="cu-direction"><option value=""></option>${opt(_dirs, _dirCur)}</select></div>
         <div class="form-group"><label class="form-label">Origine</label>
           <select class="form-control" id="cu-origine">
-            <option value="" ${!v('origine')?'selected':''}>— Non défini —</option>
-            <option value="FR" ${v('origine')==='FR'?'selected':''}>🇫🇷 KNDS France</option>
-            <option value="DE" ${v('origine')==='DE'?'selected':''}>🇩🇪 KNDS Allemagne</option>
+            <option value="" ${!_orig?'selected':''}>— Non défini —</option>
+            <option value="FR" ${_orig==='FR'?'selected':''}>🇫🇷 KNDS France</option>
+            <option value="DE" ${_orig==='DE'?'selected':''}>🇩🇪 KNDS Allemagne</option>
           </select></div>
         <div class="form-group"><label class="form-label">Visibilité</label>
           <select class="form-control" id="cu-visibilite">
@@ -213,7 +226,7 @@ function _openEditModal(cuId, container) {
       <div class="form-group"><label class="form-label">Description / Objectif</label>
         <textarea class="form-control" id="cu-desc" rows="4">${v('description')}</textarea></div>
       <div class="form-group"><label class="form-label">Gain estimé</label>
-        <input class="form-control" id="cu-gain" value="${v('gain_estime')}"></div>
+        <input class="form-control" id="cu-gain" value="${v('gain_estime') || (extras.heures_an ? formatHeures(extras.heures_an) : '')}"></div>
       <div class="form-group"><label class="form-label">Lien Jira</label>
         <input class="form-control" id="cu-jira" value="${v('jira_url')}"></div>
       <div class="form-group">
@@ -355,10 +368,19 @@ function _openEditModal(cuId, container) {
         <div class="form-group"><label class="form-label">Volume annuel (occurrences)</label>
           <input class="form-control" type="number" id="ex-vol" value="${ex('volume_annuel')}" min="0"></div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Gain estimé apporté par l'outil</label>
-        <textarea class="form-control" id="ex-gain-outil" rows="3" maxlength="10000" placeholder="Estimez le gain que l'outil pourrait apporter…">${ex('gain_outil')}</textarea>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Temps passé / an (heures)</label>
+          <input class="form-control" id="ex-heures" value="${extras.heures_an ? formatHeures(extras.heures_an) : ''}" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gain IA estimé (%)</label>
+          <input class="form-control" type="number" id="ex-gain-pct" min="0" max="100" step="1" value="${extras.gain_ia_pct ?? ''}" placeholder="Ex : 60">
+          ${extras.gain_ia_justif ? `<div class="text-sm text-muted mt-1">🤖 ${extras.gain_ia_justif}</div>` : ''}
+        </div>
       </div>
+      <div id="ex-roi-box"></div>
+      <div class="mt-1"><button type="button" class="btn btn-outline btn-sm" id="ex-roi-apply">⬇️ Appliquer ce ROI à la fiche</button></div>
     </div>
 
     <div class="modal-footer">
@@ -414,6 +436,37 @@ function _openEditModal(cuId, container) {
     if (wrap) wrap.style.display = e.target.value === 'Oui' ? '' : 'none';
   });
 
+  // ── Calcul ROI en direct ───────────────────────────────
+  let _lastCalc = null;
+  const refreshRoi = () => {
+    const d = {
+      temps_actuel:     parseFloat(document.querySelector('#ex-temps')?.value),
+      unite_temps:      document.querySelector('#ex-unite')?.value,
+      nombre_personnes: parseInt(document.querySelector('#ex-nb')?.value),
+      volume_annuel:    document.querySelector('#ex-vol')?.value,
+    };
+    _lastCalc = calcRoi(d, document.querySelector('#ex-gain-pct')?.value);
+    const h = heuresParAn(d);
+    document.querySelector('#ex-heures').value = h > 0 ? formatHeures(h) : '';
+    document.querySelector('#ex-roi-box').innerHTML = roiBoxHTML(_lastCalc);
+  };
+  ['#ex-temps','#ex-unite','#ex-nb','#ex-vol','#ex-gain-pct'].forEach(id => {
+    document.querySelector(id)?.addEventListener('input', refreshRoi);
+    document.querySelector(id)?.addEventListener('change', refreshRoi);
+  });
+  refreshRoi();
+  document.querySelector('#ex-roi-apply').addEventListener('click', () => {
+    if (_lastCalc?.roi == null) { toast('ROI non calculable : complétez les données manquantes.', 'warning'); return; }
+    document.querySelector('#cu-roi').value = _lastCalc.roi;
+    const h = document.querySelector('#ex-heures').value;
+    if (h) document.querySelector('#cu-gain').value = h;
+    toast('ROI appliqué à la fiche (onglet Général).', 'success');
+  });
+  // Nouveau CU / ROI vide : proposer automatiquement la valeur calculée
+  if (!document.querySelector('#cu-roi').value && _lastCalc?.roi != null) {
+    document.querySelector('#cu-roi').value = _lastCalc.roi;
+  }
+
   // ── Save ───────────────────────────────────────────────
   document.querySelector('#cu-save').addEventListener('click', () => {
     try {
@@ -438,6 +491,7 @@ function _openEditModal(cuId, container) {
         conditions_acces: document.querySelector('#cu-conditions').value || null,
         origine:     document.querySelector('#cu-origine').value || null,
         visibilite:  document.querySelector('#cu-visibilite').value || 'common',
+        direction:   document.querySelector('#cu-direction').value || null,
       };
 
       // Collect extras (besoin/données/roi fields) — stored in commentaire as JSON
@@ -465,7 +519,15 @@ function _openEditModal(cuId, container) {
         unite_temps:     document.querySelector('#ex-unite')?.value || null,
         nombre_personnes: parseInt(document.querySelector('#ex-nb')?.value) || null,
         volume_annuel:   parseInt(document.querySelector('#ex-vol')?.value) || null,
-        gain_outil:      document.querySelector('#ex-gain-outil')?.value.trim() || null,
+        gain_ia_pct:     document.querySelector('#ex-gain-pct')?.value !== '' ? parseFloat(document.querySelector('#ex-gain-pct').value) : null,
+        gain_ia_justif:  extras.gain_ia_justif || null,
+        heures_an:       heuresParAn({
+          temps_actuel: parseFloat(document.querySelector('#ex-temps')?.value),
+          unite_temps: document.querySelector('#ex-unite')?.value,
+          nombre_personnes: parseInt(document.querySelector('#ex-nb')?.value),
+          volume_annuel: document.querySelector('#ex-vol')?.value }) || null,
+        direction:       extras.direction || null,
+        demandeur:       extras.demandeur || null,
       };
 
       const commentaireJSON = JSON.stringify(extrasObj);
@@ -474,22 +536,22 @@ function _openEditModal(cuId, container) {
         const id = nextCuId(data.origine || null);
         run(`INSERT INTO use_cases(cu_id,nom,statut,type_besoin,technologie,type_sujet,responsable,pilote_metier,
               roi_annuel,description,gain_estime,jira_url,application_disponible,application_url,
-              conditions_acces,origine,visibilite,commentaire)
-             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+              conditions_acces,origine,visibilite,commentaire,direction)
+             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [id, data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
            data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
            data.application_disponible, data.application_url, data.conditions_acces, data.origine,
-           data.visibilite, commentaireJSON]);
+           data.visibilite, commentaireJSON, data.direction]);
         toast(`CU créé : ${id}`, 'success');
       } else {
         run(`UPDATE use_cases SET nom=?,statut=?,type_besoin=?,technologie=?,type_sujet=?,responsable=?,
               pilote_metier=?,roi_annuel=?,description=?,gain_estime=?,jira_url=?,application_disponible=?,
-              application_url=?,conditions_acces=?,origine=?,visibilite=?,commentaire=?,
+              application_url=?,conditions_acces=?,origine=?,visibilite=?,commentaire=?,direction=?,
               date_modification=datetime('now') WHERE cu_id=?`,
           [data.nom, data.statut, data.type_besoin, data.technologie, data.type_sujet, data.responsable,
            data.pilote_metier, data.roi_annuel, data.description, data.gain_estime, data.jira_url,
            data.application_disponible, data.application_url, data.conditions_acces, data.origine,
-           data.visibilite, commentaireJSON, cuId]);
+           data.visibilite, commentaireJSON, data.direction, cuId]);
         toast(`${cuId} mis à jour.`, 'success');
       }
       saveDB();
