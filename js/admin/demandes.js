@@ -264,6 +264,13 @@ window._openDemande = (demId) => {
           <select class="form-control" id="adm-resp"><option value=""></option>${opt(resps, r.responsable_admin)}</select></div>
         <div class="form-group"><label class="form-label">Pilote métier</label>
           <input class="form-control" id="adm-pilote" value="${r.pilote_metier_admin||''}"></div>
+        <div class="form-group"><label class="form-label">Visibilité du CU</label>
+          <select class="form-control" id="adm-visib">
+            <option value="undefined" selected>❔ Non défini</option>
+            <option value="common">🌍 Commun FR+DE</option>
+            <option value="FR">🇫🇷 Spécial France</option>
+            <option value="DE">🇩🇪 Spécial Allemagne</option>
+          </select></div>
         <div class="form-group"><label class="form-label">Lien Jira</label>
           <input class="form-control" id="adm-jira" placeholder="https://jira…" value="${r.jira_url_admin||''}"></div>
       </div>
@@ -311,7 +318,8 @@ window._openDemande = (demId) => {
       const pilote = document.querySelector('#adm-pilote').value;
       const jira   = document.querySelector('#adm-jira').value;
       const roi    = parseFloat(document.querySelector('#adm-roi').value) || null;
-      _validateRequest(r, { type, tech, sujet, resp, pilote, jira, roi });
+      const visib = document.querySelector('#adm-visib').value || 'undefined';
+      _validateRequest(r, { type, tech, sujet, resp, pilote, jira, roi, visib });
       closeModal();
       toast('Demande validée — CU créé.', 'success');
       const cont = document.querySelector('#main-content');
@@ -347,7 +355,7 @@ function _validateRequest(r, adm) {
     [cuId, titre, r.contexte, adm.type||r.type_besoin_ia||null,
      adm.sujet||null, 'Besoin identifié', adm.resp||null, adm.pilote||null,
      adm.tech||r.technologie_ia||null, roiFinal, gainEstime, adm.jira||null,
-     origineFromRequest, 'common', r.id, JSON.stringify(ex), r.direction || null]);
+     origineFromRequest, adm.visib || 'undefined', r.id, JSON.stringify(ex), r.direction || null]);
   run(`UPDATE requests SET statut='Validée', type_besoin_admin=?, technologie_admin=?, type_sujet_admin=?,
     responsable_admin=?, pilote_metier_admin=?, jira_url_admin=?, roi_definitif=?,
     traite_par=?, date_traitement=datetime('now'), use_case_id=(SELECT id FROM use_cases WHERE cu_id=?)

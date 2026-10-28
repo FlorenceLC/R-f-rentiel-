@@ -467,6 +467,7 @@ export function originLabel(origin) {
 export function visibilityLabel(v) {
   if (v === 'FR') return `🇫🇷 ${t('cu.visibility.fr')}`;
   if (v === 'DE') return `🇩🇪 ${t('cu.visibility.de')}`;
+  if (v === 'undefined') return '❔ Non défini';
   return `🌍 ${t('cu.visibility.common')}`;
 }
 

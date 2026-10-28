@@ -82,6 +82,7 @@ function _migrate() {
   addCol('use_cases', 'origine',    'TEXT DEFAULT NULL');
   addCol('use_cases', 'visibilite', "TEXT DEFAULT 'common'");
   addCol('requests',  'entite',     'TEXT DEFAULT NULL');
+  addCol('use_cases', 'commentaire', 'TEXT DEFAULT NULL'); // JSON : données du formulaire (Besoin / Données / ROI)
   addCol('use_cases', 'direction',  'TEXT DEFAULT NULL');
   try { // rattrape la direction des CU déjà créés depuis une demande
     _db.run(`UPDATE use_cases SET direction=(SELECT direction FROM requests WHERE requests.id=use_cases.request_id)
