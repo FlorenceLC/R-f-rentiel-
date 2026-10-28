@@ -21,6 +21,7 @@ import { renderAdminUsers }      from './admin/utilisateurs.js';
 import { renderAdminParamsIA }   from './admin/params_ia.js';
 import { renderAdminParams }     from './admin/params.js';
 import { renderAdminArchives }   from './admin/archives.js';
+import { renderAdminAnalyse }    from './admin/analyse.js';
 
 // ── State ─────────────────────────────────────────────────
 let _currentPage = 'accueil';
@@ -36,6 +37,7 @@ const PAGES = {
   guide:               { fn: renderGuide,             label: '📖 Guide',            admin: false },
   faq:                 { fn: renderFAQ,               label: '❓ FAQ',               admin: false },
   special:             { fn: renderSpecial,           label: '🌍 Spécial',           admin: false },
+  admin_analyse:       { fn: renderAdminAnalyse,      label: '📊 Analyse',          admin: true  },
   admin_demandes:      { fn: renderAdminDemandes,     label: '🔔 Demandes',         admin: true  },
   admin_catalogue:     { fn: renderAdminCatalogue,    label: '🗂️ Catalogue',         admin: true  },
   admin_archives:      { fn: renderAdminArchives,     label: '📦 Archives',         admin: true  },
@@ -118,16 +120,12 @@ function _buildSidebar() {
   const paysAdmin = getSetting('pays_admin', ''); // FR | DE | ''
   let specialLabel = null;
   if (bilingual) {
-    if (!admin) {
-      // Visitor: use their own country
-      if (userPays === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
-      else if (userPays === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
-    } else {
-      // Admin: use pays_admin setting, fallback generic
-      if (paysAdmin === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
-      else if (paysAdmin === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
-      else specialLabel = `🌍 ${t('nav.special')}`;
-    }
+    // Both visitors AND admins see the special tab when bilingual mode is on.
+    // Label is driven by pays_admin setting (or user's country for visitors).
+    const targetPays = admin ? (paysAdmin || 'FR') : (userPays || paysAdmin || 'FR');
+    if (targetPays === 'FR') specialLabel = `🇫🇷 ${tabFRLabel}`;
+    else if (targetPays === 'DE') specialLabel = `🇩🇪 ${tabDELabel}`;
+    else specialLabel = `🌍 ${t('nav.special')}`;
   }
 
   // Pending badge
@@ -153,6 +151,7 @@ function _buildSidebar() {
 
   const adminNav = admin ? `
     <div class="nav-section-label mt-2">${t('nav.admin')}</div>
+    <button class="nav-item" data-page="admin_analyse"><span class="nav-icon">📊</span> Analyse ROI</button>
     <button class="nav-item" data-page="admin_demandes"><span class="nav-icon">🔔</span> ${t('nav.admin.requests')} ${pendingBadge}</button>
     <button class="nav-item" data-page="admin_catalogue"><span class="nav-icon">🗂️</span> ${t('nav.admin.catalogue')}</button>
     <button class="nav-item" data-page="admin_archives"><span class="nav-icon">📦</span> ${t('nav.admin.archives')}</button>

@@ -46,7 +46,26 @@ function _renderList(container) {
       </div>
     </div>
 
-    <div class="text-muted text-sm mb-1">${total} demande(s)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div class="text-muted text-sm">${total} demande(s)</div>
+      <button class="btn btn-danger btn-sm" id="btn-open-delete">🗑️ Supprimer une demande</button>
+    </div>
+
+    <!-- Panneau suppression -->
+    <div id="delete-panel" style="display:none;background:#fff5f5;border:1.5px solid #fc8181;border-radius:8px;padding:14px 16px;margin-bottom:14px;">
+      <div style="font-weight:700;color:#c53030;margin-bottom:10px;">⚠️ Suppression définitive d'une demande</div>
+      <p style="font-size:13px;color:#744210;margin-bottom:10px;">Cette action est <strong>irréversible</strong>. Renseignez la référence exacte de la demande à supprimer pour confirmer.</p>
+      <div style="display:flex;gap:10px;align-items:flex-end;">
+        <div class="form-group" style="margin:0;flex:1;">
+          <label class="form-label">Référence de la demande (ex : DEM-0003)</label>
+          <input class="form-control" id="delete-ref" placeholder="DEM-XXXX" style="border-color:#fc8181;">
+        </div>
+        <button class="btn btn-danger" id="btn-confirm-delete">Supprimer définitivement</button>
+        <button class="btn btn-ghost" id="btn-cancel-delete">Annuler</button>
+      </div>
+      <div id="delete-status" class="text-sm mt-1"></div>
+    </div>
+
     <div id="dem-table">${_buildTable(rows)}</div>
     <div id="dem-pagination">${pagination(total, _page, PAGE_SIZE, '_demPage')}</div>
   `;
@@ -62,6 +81,41 @@ function _renderList(container) {
 
   container.querySelector('#dem-search').addEventListener('input', e => {
     _search = e.target.value; _page = 1; _refreshList(container);
+  });
+
+  container.querySelector('#btn-open-delete').addEventListener('click', () => {
+    const panel = container.querySelector('#delete-panel');
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    container.querySelector('#delete-ref').value = '';
+    container.querySelector('#delete-status').textContent = '';
+  });
+
+  container.querySelector('#btn-cancel-delete').addEventListener('click', () => {
+    container.querySelector('#delete-panel').style.display = 'none';
+  });
+
+  container.querySelector('#btn-confirm-delete').addEventListener('click', () => {
+    const ref = container.querySelector('#delete-ref').value.trim().toUpperCase();
+    const statusEl = container.querySelector('#delete-status');
+    if (!ref) { statusEl.innerHTML = '<span style="color:#c53030;">Veuillez saisir une référence.</span>'; return; }
+
+    const exists = queryOne(`SELECT dem_id, prenom, nom, statut FROM requests WHERE dem_id=?`, [ref]);
+    if (!exists) {
+      statusEl.innerHTML = `<span style="color:#c53030;">❌ Aucune demande trouvée avec la référence "<strong>${ref}</strong>".</span>`;
+      return;
+    }
+
+    const confirmText = `Supprimer DÉFINITIVEMENT la demande ${ref} (${exists.prenom} ${exists.nom} — ${exists.statut}) ?\n\nCette action est irréversible.`;
+    if (!confirm(confirmText)) return;
+
+    run(`DELETE FROM requests WHERE dem_id=?`, [ref]);
+    saveDB();
+    statusEl.innerHTML = `<span style="color:#276749;">✅ Demande <strong>${ref}</strong> supprimée définitivement.</span>`;
+    container.querySelector('#delete-ref').value = '';
+    setTimeout(() => {
+      container.querySelector('#delete-panel').style.display = 'none';
+      _page = 1; _refreshList(container);
+    }, 1800);
   });
 }
 

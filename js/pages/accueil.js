@@ -13,7 +13,8 @@ export function renderAccueil(container) {
       COUNT(*) FILTER (WHERE statut = 'Cadrage') AS cadrage,
       COUNT(*) FILTER (WHERE statut = 'En développement') AS en_dev,
       COUNT(*) FILTER (WHERE statut = 'Besoin identifié') AS backlog,
-      COALESCE(SUM(CASE WHEN statut='Production' THEN roi_annuel ELSE 0 END), 0) AS roi_total,
+      COALESCE(SUM(CASE WHEN statut='Production' THEN roi_annuel ELSE 0 END), 0) AS roi_confirme,
+      COALESCE(SUM(CASE WHEN statut != 'Abandonné' THEN roi_annuel ELSE 0 END), 0) AS roi_estime,
       COUNT(*) FILTER (WHERE application_disponible=1) AS apps
     FROM use_cases WHERE actif=1
   `) || {};
@@ -21,16 +22,16 @@ export function renderAccueil(container) {
   const recent = query(`SELECT * FROM use_cases WHERE actif=1 AND statut != 'Abandonné' ORDER BY date_creation DESC LIMIT 6`);
   const apps   = query(`SELECT * FROM use_cases WHERE actif=1 AND statut='Production' AND application_disponible=1 ORDER BY date_creation DESC LIMIT 3`);
   const appName = getSetting('app_name', 'Référentiel des cas d\'usage');
-  const roi_total = parseFloat(kpi.roi_total || 0);
+  const roi_confirme = parseFloat(kpi.roi_confirme || 0);
+  const roi_estime   = parseFloat(kpi.roi_estime   || 0);
   const admin = isAdmin();
 
   const kpiItems = [
-    { icon:'📋', label: t('home.kpi.total'),      value: kpi.total||0,       cls:'accent' },
-    { icon:'🚀', label: t('home.kpi.production'),  value: kpi.production||0,  cls:'success' },
-    { icon:'🧪', label: t('home.kpi.poc'),         value: kpi.poc||0,         cls:'warning' },
-    { icon:'📝', label: t('home.kpi.cadrage'),     value: kpi.cadrage||0,     cls:'info' },
+    { icon:'📋', label: t('home.kpi.total'),      value: kpi.total||0,      cls:'accent' },
+    { icon:'🚀', label: t('home.kpi.production'),  value: kpi.production||0, cls:'success' },
+    { icon:'🧪', label: t('home.kpi.poc'),         value: kpi.poc||0,        cls:'warning' },
+    { icon:'📝', label: t('home.kpi.cadrage'),     value: kpi.cadrage||0,    cls:'info' },
   ];
-  if (admin) kpiItems.push({ icon:'💶', label: t('home.kpi.roi'), value: formatROI(roi_total), cls:'success' });
 
   container.innerHTML = `
     <div class="hero">
@@ -47,6 +48,32 @@ export function renderAccueil(container) {
     </div>
 
     ${kpiGrid(kpiItems)}
+
+    ${admin ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <!-- ROI estimé (tous CU actifs) -->
+      <div class="card" style="border-left:4px solid #d69e2e;background:linear-gradient(135deg,#fffff0 0%,#fefcbf 100%);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.8rem;">⏳</span>
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#b7791f;margin-bottom:2px;">ROI estimé (tous statuts)</div>
+            <div style="font-size:1.6rem;font-weight:800;color:#744210;">${formatROI(roi_estime)}<span style="font-size:12px;font-weight:500;color:#975a16;">/an</span></div>
+            <div style="font-size:11px;color:#975a16;margin-top:2px;">Somme des ROI sur tous les CU actifs</div>
+          </div>
+        </div>
+      </div>
+      <!-- ROI confirmé (Production uniquement) -->
+      <div class="card" style="border-left:4px solid #276749;background:linear-gradient(135deg,#f0fff4 0%,#c6f6d5 100%);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.8rem;">✅</span>
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#276749;margin-bottom:2px;">ROI confirmé (en production)</div>
+            <div style="font-size:1.6rem;font-weight:800;color:#1c4532;">${formatROI(roi_confirme)}<span style="font-size:12px;font-weight:500;color:#276749;">/an</span></div>
+            <div style="font-size:11px;color:#276749;margin-top:2px;">CU en statut "Production" uniquement</div>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
 
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:20px;flex-wrap:wrap;">
       <div>

@@ -641,9 +641,9 @@ async function _runAI(container) {
     resultEl.style.display = '';
     resultEl.innerHTML = `
       <div class="alert alert-success mb-2">✅ Analyse IA terminée</div>
-      ${titreIA ? `<div class="card mb-2" style="background:var(--blue-light,#eef3ff);border:1px solid var(--blue,#3b82f6);border-radius:8px;padding:12px 16px;">
-        <div class="text-sm text-muted mb-1" style="font-weight:600;text-transform:uppercase;letter-spacing:.05em">Titre suggéré par l'IA</div>
-        <div style="font-size:16px;font-weight:700;color:var(--blue,#3b82f6)">💡 ${titreIA}</div>
+      ${titreIA ? `<div class="card mb-2" style="background:#f0f7ff;border:1px solid #90cdf4;border-radius:8px;padding:12px 16px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a90c4;margin-bottom:4px;">Titre suggéré par l'IA</div>
+        <div style="font-size:15px;font-weight:700;color:#1a365d;">💡 ${titreIA}</div>
       </div>` : ''}
       <div class="detail-grid">
         <div class="detail-item"><div class="di-label">Type de besoin</div><div class="di-value">${chip(data.type_besoin,'type')}</div></div>

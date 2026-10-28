@@ -252,9 +252,9 @@ function _renderDetail(container, cuId) {
       </div>
 
       <!-- Translation panel (hidden by default) -->
-      <div id="translation-panel" style="display:none;margin:12px 0;padding:14px 16px;border:1px solid var(--blue);border-radius:8px;background:var(--blue-light,#eef3ff);">
+      <div id="translation-panel" style="display:none;margin:12px 0;padding:14px 16px;border:1px solid #90cdf4;border-radius:8px;background:#f0f7ff;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <span style="font-weight:600;color:var(--blue)">🌐 Traduction ${targetLangLabel}</span>
+          <span style="font-weight:600;color:#2c5282;">🌐 Traduction ${targetLangLabel}</span>
           <button class="btn btn-ghost btn-sm" id="btn-close-translate">✕</button>
         </div>
         <div id="translation-content"><div class="text-muted text-sm">Chargement de la traduction…</div></div>
@@ -349,14 +349,14 @@ Description/objectif : ${desc || '(aucune description)'}`;
       const clean = text.trim().replace(/^```json?\s*/i,'').replace(/```\s*$/,'').trim();
       const parsed = JSON.parse(clean);
       content.innerHTML = `
-        <div style="margin-bottom:8px;">
-          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Titre</span>
-          <div style="font-size:15px;font-weight:700;color:var(--blue-dark);margin-top:2px">${parsed.titre||'—'}</div>
+        <div style="margin-bottom:10px;">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a90c4;">Titre</span>
+          <div style="font-size:15px;font-weight:700;color:#1a365d;margin-top:3px;">${parsed.titre||'—'}</div>
         </div>
         ${parsed.description ? `
         <div>
-          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Description</span>
-          <div style="font-size:13px;color:var(--text);line-height:1.6;margin-top:2px;white-space:pre-wrap">${parsed.description}</div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a90c4;">Description</span>
+          <div style="font-size:13px;color:#2d3748;line-height:1.7;margin-top:3px;white-space:pre-wrap;">${parsed.description}</div>
         </div>` : ''}`;
       _translated = true;
     } catch {
