@@ -79,7 +79,7 @@ export function mountRoiYearChart(el, rows) {
     const all = [...totals, ...dirList];
     const visible = all.filter(s => !st.hidden.has(s.key));
 
-    const W = 720, H = 300, P = { t: 18, r: 24, b: 32, l: 52 };
+    const W = 560, H = 300, P = { t: 18, r: 24, b: 32, l: 52 };
     const cw = W - P.l - P.r, chh = H - P.t - P.b;
     const max = Math.max(...visible.flatMap(s => s.vals), 1);
     const x = i => years.length > 1 ? P.l + (i / (years.length - 1)) * cw : P.l + cw / 2;

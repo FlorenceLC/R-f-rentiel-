@@ -106,17 +106,19 @@ export function renderAdminAnalyse(container) {
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;align-items:start;">
+    <div class="card" style="min-width:0;">
       <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:12px;">📅 Évolution du ROI par année de création</div>
       <div id="roi-year-chart"></div>
     </div>
 
-    <div class="card" style="margin-bottom:24px;">
+    <div class="card" style="min-width:0;">
       <div style="font-weight:700;font-size:14px;color:var(--blue-dark);margin-bottom:16px;">🏢 ROI par direction <span style="font-weight:400;font-size:11px;color:var(--text-muted);">(ROI réparti à parts égales pour les CU multi-directions)</span></div>
       ${roiParDir.length
         ? _horizontalBar(roiParDir.map(r=>({ label:r.dir||'—', value:r.total, sub:`${r.nb} CU` })))
         : '<div class="text-muted text-sm" style="padding:20px;text-align:center;">Aucun CU n\'a de direction associée — renseignez la direction dans les fiches CU.</div>'
       }
+    </div>
     </div>
 
     <!-- Tableau des CU avec ROI (challenger) -->
